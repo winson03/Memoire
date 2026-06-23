@@ -8,6 +8,7 @@ const session = require('express-session');
 const flash = require('connect-flash');
 
 const { passport } = require('./lib/passport');
+const { seedAdmin } = require('./lib/seed-admin');
 const storage = require('./lib/storage');
 const themes = require('./lib/themes');
 const { locals } = require('./middleware/auth');
@@ -95,6 +96,9 @@ app.use((err, req, res, next) => {
   if (req.accepts('html')) return res.send('<p style="font-family:Georgia,serif;padding:60px;text-align:center;">Something went wrong. <a href="/">← Home</a></p>');
   res.json({ error: 'server error' });
 });
+
+// Ensure an admin exists (driven by ADMIN_* env vars; safe to run every boot).
+try { seedAdmin(); } catch (e) { console.error('[seed-admin]', e.message); }
 
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
