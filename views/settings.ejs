@@ -1,0 +1,51 @@
+<%- include('partials/head', { title: 'Settings' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Settings', searchAction: '/dashboard' }) %>
+    <div class="content">
+      <div class="page">
+
+        <% if (currentUser.role === 'admin') { %>
+        <section class="settings-section">
+          <div class="flex-between" style="align-items:flex-start;gap:16px;flex-wrap:wrap;">
+            <div>
+              <h3 style="margin-bottom:6px;">Storage</h3>
+              <p style="margin:0;color:rgba(58,50,42,0.5);font-size:14px;line-height:1.5;max-width:520px;">Photos, films and PDFs are stored securely and streamed on demand.</p>
+            </div>
+            <% if (currentUser.role === 'admin') { %>
+              <span class="connected-chip <%= storageConnected ? '' : 'off' %>"><span class="live"></span><%= storageConnected ? 'Connected' : 'Offline' %></span>
+            <% } %>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat"><div class="num"><%= storage.files %></div><div class="lbl">Files</div></div>
+            <div class="mini-stat"><div class="num"><%= storage.used %></div><div class="lbl">Used</div></div>
+          </div>
+          <% if (currentUser.role === 'admin') { %>
+            <form action="/settings/reconnect" method="post" style="margin:0;">
+              <button type="submit" class="btn btn-soft" style="padding:10px 16px;border-radius:10px;font-size:13.5px;">Reconnect storage</button>
+            </form>
+          <% } %>
+        </section>
+        <% } %>
+
+        <section class="danger-section">
+          <h3>Danger zone</h3>
+          <p>Signing out keeps your stories. Deleting your account removes everything, including your stored media.</p>
+          <div class="btn-group">
+            <form action="/auth/logout" method="post" style="margin:0;">
+              <button type="submit" class="btn btn-soft">Sign out</button>
+            </form>
+            <button type="button" class="btn-danger-outline"
+                    data-confirm
+                    data-title="Delete account?"
+                    data-body="This permanently removes your account, all your stories, and their media. This can’t be undone."
+                    data-action="/settings/delete-account">Delete account</button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

@@ -1,0 +1,78 @@
+<%- include('partials/head', { title: 'Edit user' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Edit user', searchAction: '/admin/users' }) %>
+    <div class="content">
+      <div class="page">
+
+        <a href="/admin/users" class="btn-ghost" style="display:inline-block;margin-bottom:20px;">← Back to users</a>
+
+        <form method="post" action="/admin/users/<%= u.id %>">
+          <section class="settings-section">
+            <h3>Account details</h3>
+            <div class="settings-fields">
+              <div class="settings-field">
+                <label class="field-label" style="font-size:12px;">Name</label>
+                <input class="input" name="name" value="<%= u.name || '' %>" required>
+              </div>
+              <div class="settings-field">
+                <label class="field-label" style="font-size:12px;">Username</label>
+                <input class="input" name="username" value="<%= u.username || '' %>" placeholder="username">
+              </div>
+            </div>
+            <div class="settings-fields" style="margin-top:16px;">
+              <div class="settings-field">
+                <label class="field-label" style="font-size:12px;">Email</label>
+                <input class="input" type="email" name="email" value="<%= u.email || '' %>" placeholder="you@example.com">
+              </div>
+              <div class="settings-field">
+                <label class="field-label" style="font-size:12px;">Phone</label>
+                <input class="input" type="tel" name="phone" value="<%= u.phone || '' %>" placeholder="Phone number">
+              </div>
+            </div>
+            <div class="settings-fields" style="margin-top:16px;">
+              <div class="settings-field">
+                <label class="field-label" style="font-size:12px;">Date of birth</label>
+                <input class="input" type="date" name="dob" value="<%= u.dob || '' %>">
+              </div>
+              <div class="settings-field">
+                <label class="field-label" style="font-size:12px;">Role</label>
+                <% if (isSelf) { %>
+                  <select class="input" disabled>
+                    <option>Admin</option>
+                  </select>
+                  <div style="font-size:11.5px;color:rgba(58,50,42,0.45);margin-top:6px;">You can’t change your own role.</div>
+                <% } else { %>
+                  <select class="input" name="role">
+                    <option value="storyteller" <%= u.role !== 'admin' ? 'selected' : '' %>>Storyteller</option>
+                    <option value="admin" <%= u.role === 'admin' ? 'selected' : '' %>>Admin</option>
+                  </select>
+                <% } %>
+              </div>
+            </div>
+            <div style="margin-top:16px;">
+              <label class="field-label" style="font-size:12px;">Bio</label>
+              <textarea class="input" name="bio" rows="3" placeholder="Short bio…"><%= u.bio || '' %></textarea>
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <h3>Reset password <span style="font-weight:400;font-size:13px;color:rgba(58,50,42,0.45);text-transform:none;letter-spacing:0;">(optional)</span></h3>
+            <div class="settings-field" style="max-width:360px;">
+              <label class="field-label" style="font-size:12px;">New password</label>
+              <input class="input" type="password" name="new_password" placeholder="Leave blank to keep current" autocomplete="new-password">
+            </div>
+          </section>
+
+          <div class="btn-group">
+            <button type="submit" class="btn btn-accent">Save changes</button>
+            <a href="/admin/users" class="btn btn-soft">Cancel</a>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

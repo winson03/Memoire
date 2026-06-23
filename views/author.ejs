@@ -1,0 +1,46 @@
+<%- include('partials/head', { title: author.name }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Storyteller', searchAction: '/dashboard' }) %>
+    <div class="content">
+      <div class="page">
+
+        <div class="profile-head">
+          <% if (avatarUrl(author)) { %>
+            <div class="profile-avatar" style="background-image:url(<%= avatarUrl(author) %>);background-size:cover;background-position:center;"></div>
+          <% } else { %>
+            <div class="profile-avatar"><%= author.initials || 'U' %></div>
+          <% } %>
+          <div class="profile-info">
+            <h2><%= author.name %></h2>
+            <div class="handle">@<%= author.handle || (author.name || 'user').toLowerCase().replace(/\s+/g,'') %> · <%= author.role === 'admin' ? 'Storyteller & Admin' : 'Storyteller' %></div>
+            <p><%= author.bio || 'This storyteller hasn’t written a bio yet.' %></p>
+          </div>
+          <% if (isSelf) { %>
+            <a href="/profile" class="btn btn-soft">View your profile</a>
+          <% } %>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card"><div class="num"><%= stats.published %></div><div class="lbl">Published</div></div>
+          <div class="stat-card"><div class="num"><%= stats.readers.toLocaleString('en-US') %></div><div class="lbl">Readers</div></div>
+          <div class="stat-card"><div class="num"><%= stats.likes.toLocaleString('en-US') %></div><div class="lbl">Likes</div></div>
+        </div>
+
+        <h3 class="h3" style="font-size:23px;margin-bottom:22px;">Published stories</h3>
+        <% if (books.length) { %>
+          <div class="cover-grid">
+            <% books.forEach(function(book){ %>
+              <%- include('partials/cover-card', { book: book, opts: { showFav: false, foot: 'status', small: true } }) %>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="empty"><div class="et">No published stories yet</div><div class="eh">When <%= author.name %> publishes a story, it’ll appear here.</div></div>
+        <% } %>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

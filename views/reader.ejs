@@ -1,0 +1,107 @@
+<%- include('partials/head', { title: openBook.title }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Reading', searchAction: '/dashboard' }) %>
+    <div class="content">
+      <div class="page tight">
+        <a href="/dashboard" class="btn-ghost" style="display:inline-block;margin-bottom:26px;">← Back to dashboard</a>
+        <div class="reader-col">
+
+          <div class="reader-head">
+            <div class="reader-cover">
+              <div class="cover-spine <%= coverIsImage(openBook) ? 'has-image' : '' %>" style="background: <%= coverBackground(openBook) %>;">
+                <span class="cover-series"><%= openBook.series || '' %></span>
+                <div>
+                  <div class="cover-title"><%= openBook.title %></div>
+                  <div class="cover-author"><%= openBook.author %></div>
+                </div>
+              </div>
+            </div>
+            <div class="reader-meta">
+              <span class="status" style="color: <%= statusColor(openBook.status) %>;"><span class="dot" style="background: <%= statusColor(openBook.status) %>;"></span><%= statusLabel(openBook.status) %></span>
+              <h1><%= openBook.title %></h1>
+              <div class="byline">By <% if (isOwner) { %><%= openBook.author %><% } else { %><a href="/u/<%= openBook.user_id %>" class="author-link"><%= openBook.author %></a><% } %> · <%= openBook.year %> · <%= metaRight(openBook) %> · <span class="reader-likes">♥ <%= openBook.likes || 0 %> likes</span></div>
+              <div class="reader-actions">
+                <form action="/stories/<%= openBook.id %>/favourite" method="post" style="margin:0;">
+                  <input type="hidden" name="redirect" value="/reader/<%= openBook.id %>">
+                  <button type="submit" class="btn btn-soft"><%= faved ? '♥ In favourites' : '♡ Add to favourites' %></button>
+                </form>
+                <% if (isOwner) { %>
+                  <a href="/editor?id=<%= openBook.id %>" class="btn btn-accent">Edit story</a>
+                  <button type="button" class="btn-danger-soft" style="width:auto;padding:11px 18px;"
+                          data-confirm
+                          data-title="Delete this story?"
+                          data-body="“<%= openBook.title %>” and all its media will be permanently removed. This can’t be undone."
+                          data-action="/stories/<%= openBook.id %>/delete">Delete this story</button>
+                <% } %>
+              </div>
+            </div>
+          </div>
+
+          <% if (openBook.blurb) { %>
+            <div class="reader-desc" data-expandable>
+              <p class="blurb clamp"><%= openBook.blurb %></p>
+              <button type="button" class="desc-toggle" hidden>Show more</button>
+            </div>
+          <% } %>
+
+          <% if (openBook.type === 'novel') { %>
+            <% if (blocks && blocks.length) { %>
+              <div class="story-body">
+                <% blocks.forEach(function(b){ %>
+                  <% if (b.type === 'text') { %>
+                    <p><%= b.value %></p>
+                  <% } else if (b.type === 'image') { %>
+                    <figure class="story-img">
+                      <img src="/media/<%= b.mediaId %>" alt="" loading="lazy">
+                      <% if (b.caption) { %><figcaption><%= b.caption %></figcaption><% } %>
+                    </figure>
+                  <% } %>
+                <% }) %>
+              </div>
+            <% } else if (isOwner) { %>
+              <div class="empty"><div class="et">Nothing written yet</div><div class="eh">Open the editor and add paragraphs &amp; images to start.</div></div>
+            <% } %>
+          <% } else { %>
+          <div class="reader-figs">
+            <% if (photos.length) { %>
+              <% photos.forEach(function(m){ %>
+                <figure>
+                  <% if (m.telegram_file_id && m.kind === 'photo') { %>
+                    <div class="photo-frame"><img src="/media/<%= m.id %>" alt="<%= m.label || '' %>" loading="lazy"></div>
+                  <% } else if (m.telegram_file_id && m.kind === 'video') { %>
+                    <div class="photo-frame"><video src="/media/<%= m.id %>" controls preload="metadata"></video></div>
+                  <% } else if (m.telegram_file_id && m.kind === 'pdf') { %>
+                    <div class="photo-frame pdf"><iframe src="/media/<%= m.id %>" title="<%= m.label || 'document' %>"></iframe></div>
+                  <% } else if (m.telegram_file_id) { %>
+                    <div class="photo-frame"><a class="btn btn-soft" href="/media/<%= m.id %>?download=1">⤓ Download <%= m.label || m.file_name || 'file' %></a></div>
+                  <% } else { %>
+                    <div class="photo-frame"><span class="ph">photo · <%= m.label || 'untitled' %></span></div>
+                  <% } %>
+                  <figcaption><%= m.label || '' %></figcaption>
+                </figure>
+              <% }) %>
+            <% } else { %>
+              <div class="empty"><div class="et">No media yet</div><div class="eh">Add photos and films in the editor.</div></div>
+            <% } %>
+          </div>
+          <% } %>
+
+          <% if (moreByAuthor.length) { %>
+            <div class="more-from">
+              <h3 class="h3" style="margin-bottom:20px;">More from <%= openBook.author %></h3>
+              <div class="cover-grid xs">
+                <% moreByAuthor.forEach(function(book){ %>
+                  <%- include('partials/cover-card', { book: book, opts: { showFav: false, foot: 'none', titleSize: 18, hideAuthor: true } }) %>
+                <% }) %>
+              </div>
+            </div>
+          <% } %>
+
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

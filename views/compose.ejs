@@ -1,0 +1,47 @@
+<%- include('partials/head', { title: 'Write · ' + book.title }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Write', searchAction: '/dashboard' }) %>
+    <div class="content">
+      <form class="page narrow" method="post" action="/stories/<%= book.id %>/content" id="composeForm">
+        <div class="editor-top">
+          <a href="/editor?id=<%= book.id %>" class="btn-ghost">← Back to editor</a>
+          <button type="submit" class="btn btn-accent">Save story</button>
+        </div>
+
+        <h1 class="compose-title"><%= book.title %></h1>
+        <p class="compose-hint">Write your story in blocks — add paragraphs and images in any order, and reorder them with ↑ ↓.</p>
+
+        <div id="composer" data-book="<%= book.id %>">
+          <div class="blocks" id="blocks">
+            <% blocks.forEach(function(b){ %>
+              <% if (b.type === 'text') { %>
+                <div class="block block-text">
+                  <div class="block-ctrl"><button type="button" data-up title="Move up">↑</button><button type="button" data-down title="Move down">↓</button><button type="button" data-del title="Remove">✕</button></div>
+                  <textarea class="input block-text-input" rows="4" placeholder="Write a paragraph…"><%= b.value %></textarea>
+                </div>
+              <% } else if (b.type === 'image') { %>
+                <div class="block block-image" data-media-id="<%= b.mediaId %>">
+                  <div class="block-ctrl"><button type="button" data-up title="Move up">↑</button><button type="button" data-down title="Move down">↓</button><button type="button" data-del title="Remove">✕</button></div>
+                  <img src="/media/<%= b.mediaId %>" alt="">
+                  <input class="input block-cap" placeholder="Caption (optional)" value="<%= b.caption || '' %>">
+                </div>
+              <% } %>
+            <% }) %>
+          </div>
+
+          <div class="composer-add">
+            <button type="button" class="btn btn-soft" id="addTextBtn">＋ Paragraph</button>
+            <button type="button" class="btn btn-soft" id="addImageBtn">＋ Image</button>
+            <span id="composeUpload" class="upload-progress" hidden>Uploading…</span>
+            <input type="file" id="composerImageInput" accept="image/*" multiple hidden>
+          </div>
+        </div>
+
+        <input type="hidden" name="content" id="contentField">
+      </form>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

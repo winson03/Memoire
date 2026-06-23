@@ -1,0 +1,38 @@
+<%
+  // opts: { foot: 'status-meta'|'meta'|'status'|'none', showFav: bool, titleSize: px, small: bool }
+  var o = typeof opts !== 'undefined' ? opts : {};
+  var foot = o.foot || 'none';
+  var showFav = o.showFav !== false;
+  var faved = favIds.indexOf(book.id) !== -1;
+  var titleSize = o.titleSize || (o.small ? 20 : 21);
+%>
+<div class="cover-card" data-href="/reader/<%= book.id %>">
+  <div class="cover-spine <%= coverIsImage(book) ? 'has-image' : '' %>" style="background: <%= coverBackground(book) %>;">
+    <% if (showFav) { %>
+      <div class="cover-top">
+        <span class="cover-series"><%= book.series || '' %></span>
+        <button class="heart-btn <%= faved ? 'faved' : '' %>" data-fav-id="<%= book.id %>" aria-label="Toggle favourite"><%= faved ? '♥' : '♡' %></button>
+      </div>
+    <% } else { %>
+      <span class="cover-series"><%= book.series || '' %></span>
+    <% } %>
+    <div>
+      <div class="cover-title" style="font-size: <%= titleSize %>px;"><%= book.title %></div>
+      <% if (!o.hideAuthor) { %><div class="cover-author"><%= book.author %></div><% } %>
+    </div>
+  </div>
+
+  <% if (foot !== 'none') { %>
+    <div class="cover-foot">
+      <span class="cover-foot-l">
+        <% if (foot === 'status-meta' || foot === 'status') { %>
+          <span class="status" style="color: <%= statusColor(book.status) %>;"><span class="dot" style="background: <%= statusColor(book.status) %>;"></span><%= statusLabel(book.status) %></span>
+        <% } %>
+        <span class="cover-likes" title="<%= (book.likes || 0) %> likes">♥ <%= book.likes || 0 %></span>
+      </span>
+      <% if (foot === 'status-meta' || foot === 'meta') { %>
+        <span class="cover-meta dim"><%= metaRight(book) %></span>
+      <% } %>
+    </div>
+  <% } %>
+</div>

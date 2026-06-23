@@ -1,0 +1,179 @@
+<% var isNovel = book.type === 'novel'; %>
+<%- include('partials/head', { title: isNovel ? 'Novel editor' : 'Story editor' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: isNovel ? 'Novel editor' : 'Story editor', searchAction: '/dashboard' }) %>
+    <div class="content">
+      <form class="page" method="post" action="/stories/<%= book.id %>" id="editorForm">
+        <div class="editor-top">
+          <a href="/reader/<%= book.id %>" class="btn-ghost">← Discard &amp; close</a>
+          <div style="display:flex;gap:12px;align-items:center;">
+            <% if (book.is_saved) { %>
+              <button type="button" class="btn-danger-soft" style="width:auto;padding:11px 18px;"
+                      data-confirm
+                      data-title="Delete this story?"
+                      data-body="“<%= book.title %>” and all its media will be permanently removed. This can’t be undone."
+                      data-action="/stories/<%= book.id %>/delete">Delete this story</button>
+            <% } %>
+            <% var saveLabels = { published: 'Publish story', private: 'Save privately', draft: 'Save as draft' }; %>
+            <button type="submit" class="btn btn-accent" id="saveBtn"><%= saveLabels[book.status] || 'Save story' %></button>
+          </div>
+        </div>
+
+
+        <div class="editor-grid">
+          <!-- LEFT RAIL -->
+          <div class="editor-rail">
+            <div>
+              <div class="label-up">Cover</div>
+              <div class="cover-spine <%= coverIsImage(book) ? 'has-image' : '' %>" id="coverPreview" data-cover-url="<%= (book.cover_mode === 'upload' && book.cover_media_id) ? ('/media/' + book.cover_media_id) : '' %>" style="background: <%= coverBackground(book) %>;">
+                <span class="cover-series" id="coverSeries"><%= book.series || '' %></span>
+                <div>
+                  <div class="cover-title" id="coverTitle" style="font-size:22px;"><%= book.title %></div>
+                  <div class="cover-author"><%= book.author %></div>
+                </div>
+              </div>
+
+              <!-- Cover source: upload your own / colour theme / first photo -->
+              <div class="cover-modes" id="coverModes">
+                <% var cm = book.cover_mode || 'theme'; %>
+                <label class="cover-mode <%= cm === 'upload' ? 'selected' : '' %>">
+                  <input type="radio" name="cover_mode" value="upload" <%= cm === 'upload' ? 'checked' : '' %> hidden> Upload image
+                </label>
+                <label class="cover-mode <%= cm === 'theme' ? 'selected' : '' %>">
+                  <input type="radio" name="cover_mode" value="theme" <%= cm === 'theme' ? 'checked' : '' %> hidden> Colour theme
+                </label>
+                <label class="cover-mode <%= cm === 'first' ? 'selected' : '' %>">
+                  <input type="radio" name="cover_mode" value="first" <%= cm === 'first' ? 'checked' : '' %> hidden> First photo
+                </label>
+              </div>
+
+              <!-- Mode-specific controls -->
+              <div class="cover-panel" data-cover-panel="upload" <%= cm === 'upload' ? '' : 'hidden' %>>
+                <input type="file" id="coverInput" accept="image/*" hidden>
+                <button type="button" class="replace-cover" id="coverUploadBtn" data-book="<%= book.id %>">⤓ Upload cover image</button>
+              </div>
+              <div class="cover-panel" data-cover-panel="theme" <%= cm === 'theme' ? '' : 'hidden' %>>
+                <select name="theme" id="themeSelect" class="replace-cover" style="cursor:pointer;">
+                  <% themeKeys.forEach(function(t){ %>
+                    <option value="<%= t %>" <%= book.theme === t ? 'selected' : '' %>>Colour theme — <%= t %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="cover-panel" data-cover-panel="first" <%= cm === 'first' ? '' : 'hidden' %>>
+                <div class="cover-hint">Uses your first uploaded photo as the cover.</div>
+              </div>
+            </div>
+
+            <div>
+              <div class="label-up">Visibility</div>
+              <div class="visibility-list">
+                <% statusDefs.forEach(function(s){ %>
+                  <label class="visibility-card <%= book.status === s.key ? 'selected' : '' %>" data-visibility>
+                    <input type="radio" name="status" value="<%= s.key %>" <%= book.status === s.key ? 'checked' : '' %> hidden>
+                    <div class="t"><%= s.label %></div>
+                    <div class="d"><%= s.desc %></div>
+                  </label>
+                <% }) %>
+              </div>
+            </div>
+
+            <% if (currentUser && currentUser.role === 'admin') { %>
+              <div class="telegram-note">
+                <span class="live"></span>
+                Media uploads are stored securely in your private library.
+              </div>
+            <% } %>
+
+          </div>
+
+          <!-- RIGHT COLUMN -->
+          <div class="editor-main">
+            <div class="glass panel">
+              <label class="field-label" for="titleInput">Title</label>
+              <input id="titleInput" class="input serif" name="title" value="<%= book.title %>" style="margin-bottom:18px;" required>
+              <label class="field-label" for="blurbInput">Description</label>
+              <textarea id="blurbInput" class="input" name="blurb" rows="3"><%= book.blurb || '' %></textarea>
+              <div style="margin-top:18px;">
+                <label class="field-label" for="folderSelect" style="font-size:12px;">Folder</label>
+                <select id="folderSelect" name="folder_id" class="pseudo-select" style="width:100%;cursor:pointer;">
+                  <option value="">No folder</option>
+                  <% folders.forEach(function(f){ %>
+                    <option value="<%= f.id %>" <%= book.folder_id === f.id ? 'selected' : '' %>><%= f.name %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <input type="hidden" name="series" id="seriesInput" value="<%= book.series || '' %>">
+            </div>
+
+            <% if (isNovel) { %>
+            <div class="glass panel">
+              <div class="media-head">
+                <div class="t">Story <span id="composeUpload" class="upload-progress" hidden>Uploading…</span></div>
+              </div>
+              <div class="media-hint">Add paragraphs and images in any order; reorder with ↑ ↓.</div>
+              <div id="composer" data-book="<%= book.id %>">
+                <div class="blocks" id="blocks">
+                  <% blocks.forEach(function(b){ %>
+                    <% if (b.type === 'text') { %>
+                      <div class="block block-text">
+                        <div class="block-ctrl"><button type="button" data-up title="Move up">↑</button><button type="button" data-down title="Move down">↓</button><button type="button" data-del title="Remove">✕</button></div>
+                        <textarea class="input block-text-input" rows="4" placeholder="Write a paragraph…"><%= b.value %></textarea>
+                      </div>
+                    <% } else if (b.type === 'image') { %>
+                      <div class="block block-image" data-media-id="<%= b.mediaId %>">
+                        <div class="block-ctrl"><button type="button" data-up title="Move up">↑</button><button type="button" data-down title="Move down">↓</button><button type="button" data-del title="Remove">✕</button></div>
+                        <img src="/media/<%= b.mediaId %>" alt="">
+                        <input class="input block-cap" placeholder="Caption (optional)" value="<%= b.caption || '' %>">
+                      </div>
+                    <% } %>
+                  <% }) %>
+                </div>
+                <div class="composer-add">
+                  <button type="button" class="btn btn-soft" id="addTextBtn">＋ Paragraph</button>
+                  <button type="button" class="btn btn-soft" id="addImageBtn">＋ Image</button>
+                  <input type="file" id="composerImageInput" accept="image/*" multiple hidden>
+                </div>
+              </div>
+              <input type="hidden" name="content" id="contentField">
+            </div>
+            <% } %>
+
+            <% if (!isNovel) { %>
+            <div class="glass panel">
+              <div class="media-head">
+                <div class="t">Photos &amp; films <span id="uploadProgress" class="upload-progress" hidden></span></div>
+                <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="addMediaBtn">+ Add media</button>
+              </div>
+              <div class="media-hint">Drag the tiles to reorder. Photos, films and PDFs are stored securely.</div>
+              <input type="file" id="mediaInput" multiple accept="image/*,video/*,application/pdf" hidden>
+              <div class="media-grid" id="mediaGrid" data-book="<%= book.id %>">
+                <% photos.forEach(function(m, i){ %>
+                  <div class="media-tile" draggable="true" data-media-id="<%= m.id %>">
+                    <div class="media-thumb">
+                      <span class="media-badge"><%= i + 1 %></span>
+                      <button type="button" class="media-remove" data-remove="<%= m.id %>" title="Remove">×</button>
+                      <% if (m.telegram_file_id && m.kind === 'photo') { %>
+                        <img src="/media/<%= m.id %>" alt="" draggable="false">
+                      <% } else if (m.telegram_file_id && m.kind === 'video') { %>
+                        <video src="/media/<%= m.id %>" muted preload="metadata"></video>
+                      <% } else { %>
+                        <span class="media-kind"><%= (m.kind || 'file').toUpperCase() %></span>
+                      <% } %>
+                      <span class="media-grip" title="Drag to reorder">⠿</span>
+                    </div>
+                    <div class="media-name"><%= m.label || m.file_name || 'Untitled' %></div>
+                  </div>
+                <% }) %>
+                <button type="button" class="add-media-tile" id="addMediaTile">+ Add media</button>
+              </div>
+            </div>
+            <% } %>
+          </div>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

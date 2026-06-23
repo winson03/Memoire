@@ -1,0 +1,26 @@
+<%- include('partials/head', { title: 'Favourites' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Favourites', searchAction: '/favourites' }) %>
+    <div class="content">
+      <div class="page">
+        <p class="muted-line"><%= favCount %> <%= favCount === 1 ? 'story' : 'stories' %> saved to return to.</p>
+        <% if (favBooks.length) { %>
+          <div class="cover-grid">
+            <% favBooks.forEach(function(book){ %>
+              <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'meta' } }) %>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="empty">
+            <div class="ico">♡</div>
+            <div class="et">No favourites yet</div>
+            <div class="eh">Tap the heart on any story to keep it here.</div>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

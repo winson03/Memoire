@@ -1,0 +1,60 @@
+<%- include('partials/head', { title: 'Reports' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Reports', searchAction: '/reports' }) %>
+    <div class="content">
+      <div class="page">
+
+        <%
+          var sfx = function(extra){ return '?' + extra + (isAdmin ? ('&scope=' + scope) : ''); };
+          var rangeUrl = function(r){ return '/reports?chart=' + r + (isAdmin ? ('&scope=' + scope) : ''); };
+          var scopeUrl = function(s){ return '/reports?scope=' + s + '&chart=' + range; };
+          var labels = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' };
+        %>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:20px;">
+          <% if (isAdmin) { %>
+            <div class="chart-toggle">
+              <a href="<%= scopeUrl('mine') %>" class="chart-tab <%= scope === 'mine' ? 'active' : '' %>">My stories</a>
+              <a href="<%= scopeUrl('all') %>" class="chart-tab <%= scope === 'all' ? 'active' : '' %>">All stories</a>
+            </div>
+          <% } else { %><span></span><% } %>
+          <div class="chart-toggle">
+            <% ['day','week','month','year'].forEach(function(r){ %>
+              <a href="<%= rangeUrl(r) %>" class="chart-tab <%= range === r ? 'active' : '' %>"><%= labels[r] %></a>
+            <% }) %>
+          </div>
+        </div>
+
+        <div class="stat-grid" style="margin-bottom:24px;">
+          <div class="stat-card"><div class="num"><%= totalViewsToday.toLocaleString('en-US') %></div><div class="lbl">Views today</div></div>
+          <div class="stat-card"><div class="num"><%= totalLikesToday.toLocaleString('en-US') %></div><div class="lbl">Likes today</div></div>
+        </div>
+
+        <%
+          function renderChart(title, data, klass) {
+        %>
+          <section class="chart-card" style="margin-bottom:20px;">
+            <h3 class="chart-title"><%= title %></h3>
+            <% var maxC = Math.max(1, ...data.map(function(c){ return c.count; })); %>
+            <div class="chart">
+              <% data.forEach(function(c){ %>
+                <div class="bar-wrap">
+                  <div class="bar-val"><%= c.count || '' %></div>
+                  <div class="bar <%= klass %>" style="height: <%= Math.round((c.count / maxC) * 100) %>%;" title="<%= c.label %>: <%= c.count %>"></div>
+                  <div class="bar-label"><%= c.label %></div>
+                </div>
+              <% }) %>
+            </div>
+          </section>
+        <% } %>
+
+        <% renderChart('Views', viewsChart, 'bar-views'); %>
+        <% renderChart('Likes', likesChart, 'bar-likes'); %>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

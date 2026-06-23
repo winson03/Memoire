@@ -1,0 +1,59 @@
+<%- include('partials/head', { title: 'Discover' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Discover', searchAction: '/discover' }) %>
+    <div class="content">
+      <div class="page">
+
+        <p class="muted-line">
+          <%= total %> published <%= total === 1 ? 'story' : 'stories' %><%= query ? (' matching “' + query + '”') : '' %>.
+        </p>
+
+        <% if (books.length) { %>
+          <div class="cover-grid">
+            <% books.forEach(function(book){ %>
+              <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'meta' } }) %>
+            <% }) %>
+          </div>
+
+          <% if (totalPages > 1) { %>
+            <%
+              var qs = function(p){ return '/discover?page=' + p + (query ? ('&q=' + encodeURIComponent(query)) : ''); };
+            %>
+            <nav class="pager">
+              <% if (page > 1) { %>
+                <a class="pager-btn" href="<%= qs(page - 1) %>">← Prev</a>
+              <% } else { %>
+                <span class="pager-btn disabled">← Prev</span>
+              <% } %>
+
+              <% for (var p = 1; p <= totalPages; p++) { %>
+                <% if (p === page) { %>
+                  <span class="pager-num active"><%= p %></span>
+                <% } else { %>
+                  <a class="pager-num" href="<%= qs(p) %>"><%= p %></a>
+                <% } %>
+              <% } %>
+
+              <% if (page < totalPages) { %>
+                <a class="pager-btn" href="<%= qs(page + 1) %>">Next →</a>
+              <% } else { %>
+                <span class="pager-btn disabled">Next →</span>
+              <% } %>
+            </nav>
+            <div class="pager-info">Page <%= page %> of <%= totalPages %></div>
+          <% } %>
+        <% } else { %>
+          <div class="empty">
+            <div class="ico">✦</div>
+            <div class="et"><%= query ? 'No matching published stories' : 'No published stories yet' %></div>
+            <div class="eh"><%= query ? 'Try a different search.' : 'Published stories from everyone will appear here.' %></div>
+          </div>
+        <% } %>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

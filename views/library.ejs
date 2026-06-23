@@ -1,0 +1,43 @@
+<%- include('partials/head', { title: 'Your library' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Your library', searchAction: '/library' }) %>
+    <div class="content">
+      <div class="page">
+
+        <p class="muted-line">
+          <%= total %> <%= total === 1 ? 'story' : 'stories' %> in your library<%= query ? (' matching “' + query + '”') : '' %>.
+        </p>
+
+        <% if (books.length) { %>
+          <div class="cover-grid">
+            <% books.forEach(function(book){ %>
+              <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'status-meta' } }) %>
+            <% }) %>
+          </div>
+
+          <% if (totalPages > 1) { %>
+            <% var qs = function(p){ return '/library?page=' + p + (query ? ('&q=' + encodeURIComponent(query)) : ''); }; %>
+            <nav class="pager">
+              <% if (page > 1) { %><a class="pager-btn" href="<%= qs(page - 1) %>">← Prev</a><% } else { %><span class="pager-btn disabled">← Prev</span><% } %>
+              <% for (var p = 1; p <= totalPages; p++) { %>
+                <% if (p === page) { %><span class="pager-num active"><%= p %></span><% } else { %><a class="pager-num" href="<%= qs(p) %>"><%= p %></a><% } %>
+              <% } %>
+              <% if (page < totalPages) { %><a class="pager-btn" href="<%= qs(page + 1) %>">Next →</a><% } else { %><span class="pager-btn disabled">Next →</span><% } %>
+            </nav>
+            <div class="pager-info">Page <%= page %> of <%= totalPages %></div>
+          <% } %>
+        <% } else { %>
+          <div class="empty">
+            <div class="ico">✦</div>
+            <div class="et"><%= query ? 'No matching stories' : 'Your library is empty' %></div>
+            <div class="eh"><%= query ? 'Try a different search.' : 'Start your first story to see it here.' %></div>
+          </div>
+        <% } %>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

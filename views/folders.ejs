@@ -1,0 +1,147 @@
+<%- include('partials/head', { title: 'Folders & Collections' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Folders & Collections', searchAction: '/folders' }) %>
+    <div class="content">
+      <div class="page">
+
+        <!-- ── COLLECTIONS (group folders) ─────────────────────────────── -->
+        <div class="flex-between" style="margin-bottom:22px;">
+          <h2 class="h2">Your collections</h2>
+          <button class="btn btn-soft"
+                  data-create-dialog
+                  data-title="New collection"
+                  data-label="Collection name"
+                  data-action="/collections">+ New collection</button>
+        </div>
+
+        <% if (collections.length) { %>
+          <div class="folder-grid">
+            <% collections.forEach(function(c){ %>
+              <div class="folder-card <%= selectedCollection && selectedCollection.id === c.id ? 'is-selected' : '' %>" data-href="/folders?collection=<%= c.id %>">
+                <div class="flex-between" style="align-items:flex-start;">
+                  <div>
+                    <div class="folder-name"><%= c.name %></div>
+                    <div class="folder-count"><%= c.folderCount %> <%= c.folderCount === 1 ? 'folder' : 'folders' %></div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <form action="/collections/<%= c.id %>/delete" method="post" style="margin:0;">
+                      <button type="submit" class="btn-delete"
+                              data-confirm
+                              data-title="Delete collection?"
+                              data-body="Deleting “<%= c.name %>” removes the collection only — its <%= c.folderCount %> <%= c.folderCount === 1 ? 'folder is' : 'folders are' %> kept and become un-filed.">Delete</button>
+                    </form>
+                    <span class="arrow">→</span>
+                  </div>
+                </div>
+                <div class="folder-thumbs">
+                  <% c.folderThemes.forEach(function(theme){ %>
+                    <div class="folder-thumb" style="background: <%= themeGradient(theme) %>;"></div>
+                  <% }) %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="empty" style="margin-bottom:40px;">
+            <div class="ico">◈</div>
+            <div class="et">No collections yet</div>
+            <div class="eh">Create a collection to group several folders together.</div>
+          </div>
+        <% } %>
+
+        <!-- ── FOLDERS (group stories) ──────────────────────────────────── -->
+        <div class="flex-between" style="margin:42px 0 18px;">
+          <div class="breadcrumb">
+            <% if (selectedCollection) { %>
+              <a href="/folders">Collections</a><span>/</span>
+              <span class="here"><%= selectedCollection.name %></span>
+            <% } else { %>
+              <span class="here">Your folders</span>
+            <% } %>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <% if (selectedCollection) { %>
+              <a href="/folders" class="btn-link-accent" style="font-size:13px;">Show all folders</a>
+            <% } %>
+            <button class="btn btn-soft"
+                    data-create-dialog
+                    data-title="New folder"
+                    data-label="Folder name"
+                    data-action="/folders<%= selectedCollection ? ('?collection=' + selectedCollection.id) : '' %>">+ New folder</button>
+          </div>
+        </div>
+
+        <% if (folders.length) { %>
+          <div class="folder-grid">
+            <% folders.forEach(function(f){ %>
+              <div class="folder-card" data-href="/folders?open=<%= f.id %>">
+                <div class="flex-between" style="align-items:flex-start;">
+                  <div>
+                    <div class="folder-name"><%= f.name %></div>
+                    <div class="folder-count"><%= f.count %> <%= f.count === 1 ? 'story' : 'stories' %></div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <form action="/folders/<%= f.id %>/delete" method="post" style="margin:0;">
+                      <button type="submit" class="btn-delete"
+                              data-confirm
+                              data-title="Delete folder?"
+                              data-body="Deleting “<%= f.name %>” permanently removes its <%= f.count %> stories. This can’t be undone.">Delete</button>
+                    </form>
+                    <span class="arrow">→</span>
+                  </div>
+                </div>
+                <div class="folder-thumbs">
+                  <% f.covers.forEach(function(b){ %>
+                    <div class="folder-thumb <%= coverIsImage(b) ? 'has-image' : '' %>" style="background: <%= coverBackground(b) %>;"></div>
+                  <% }) %>
+                </div>
+                <!-- Move this folder into a collection -->
+                <form action="/folders/<%= f.id %>/collection" method="post" style="margin:0;">
+                  <select name="collection_id" class="folder-collection" data-autosubmit>
+                    <option value="">— No collection —</option>
+                    <% collections.forEach(function(c){ %>
+                      <option value="<%= c.id %>" <%= f.collection_id === c.id ? 'selected' : '' %>>In: <%= c.name %></option>
+                    <% }) %>
+                  </select>
+                </form>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="empty">
+            <div class="ico">◈</div>
+            <div class="et"><%= selectedCollection ? 'No folders in this collection yet' : 'No folders yet' %></div>
+            <div class="eh"><%= selectedCollection ? ('Add a folder to “' + selectedCollection.name + '” with + New folder.') : 'Create a folder to start organising your stories.' %></div>
+          </div>
+        <% } %>
+
+        <!-- ── OPEN FOLDER → its stories ────────────────────────────────── -->
+        <% if (openFolder) { %>
+          <div class="flex-between" style="margin:42px 0 18px;">
+            <div class="breadcrumb">
+              <a href="/folders">Folders</a><span>/</span>
+              <span class="here"><%= openFolder.name %></span>
+            </div>
+            <a href="/editor?folder=<%= openFolder.id %>" class="btn btn-soft" style="padding:9px 14px;border-radius:10px;font-size:13px;">+ New story here</a>
+          </div>
+          <% if (folderBooks.length) { %>
+            <div class="cover-grid sm">
+              <% folderBooks.forEach(function(book){ %>
+                <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'status', small: true } }) %>
+              <% }) %>
+            </div>
+          <% } else { %>
+            <div class="empty">
+              <div class="et">No stories in this folder yet</div>
+              <div class="eh">Add a story to “<%= openFolder.name %>” from the editor.</div>
+            </div>
+          <% } %>
+        <% } %>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

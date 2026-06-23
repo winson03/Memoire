@@ -1,0 +1,83 @@
+<%- include('partials/head', { title: 'A home for the stories worth keeping' }) %>
+
+<div style="min-height:100vh;">
+  <header class="landing-header">
+    <div class="logo">
+      <div class="logo-mark">M</div>
+      <span class="logo-word">Mémoire</span>
+    </div>
+    <div class="landing-nav">
+      <a href="/#discover" class="nav-text">Discover</a>
+      <a href="/#how" class="nav-text">How it works</a>
+      <a href="/login" class="btn btn-glass">Sign in</a>
+      <a href="/login" class="btn btn-accent">Start your story</a>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-copy">
+      <div class="eyebrow-pill">A home for the stories worth keeping</div>
+      <h1>Every life is a<br><span class="accent-italic">library of moments.</span></h1>
+      <p>Gather your photographs, letters and films into beautiful stories. Arrange them, write the memory down, and share with the people who should read it.</p>
+      <div class="hero-ctas">
+        <a href="/login" class="btn btn-accent btn-accent-lg">Begin a story</a>
+        <a href="/login" class="btn btn-glass btn-glass-lg">Browse published</a>
+      </div>
+    </div>
+    <div class="hero-stage">
+      <div class="float-cover fc-1">
+        <span class="eyebrow">Family</span>
+        <div><div class="ft">My Grandmother's Kitchen</div><div class="fa">Priya Raman</div></div>
+      </div>
+      <div class="float-cover fc-2">
+        <span class="eyebrow">Travels</span>
+        <div><div class="ft">The Lighthouse Years</div><div class="fa">Eleanor Mercier</div></div>
+      </div>
+      <div class="float-cover fc-3">
+        <span class="eyebrow">Letters</span>
+        <div><div class="ft">Letters to Marseille</div><div class="fa">Eleanor Mercier</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="features">
+      <div class="feature-card">
+        <div class="feature-icon">✦</div>
+        <div class="ft">Write &amp; arrange</div>
+        <p>Drop in photos and films, drag them into order, and tell the story around them.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">◈</div>
+        <div class="ft">Folders &amp; collections</div>
+        <p>Organise stories into folders and themed collections that grow over years.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">◎</div>
+        <div class="ft">Publish or keep private</div>
+        <p>Share with everyone, keep it just for you, or save as draft until it's ready.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-recent" id="discover">
+    <div class="section-head">
+      <h2>Recently published</h2>
+      <a href="/login" class="btn-link-accent" style="font-size:14.5px;">See all →</a>
+    </div>
+    <div class="cover-grid">
+      <% discover.forEach(function(book){ %>
+        <%- include('partials/cover-card', { book: book, opts: { showFav: false, foot: 'meta' } }) %>
+      <% }) %>
+    </div>
+  </section>
+
+  <footer class="landing-footer">
+    <div class="inner">
+      <span class="brand">Mémoire</span>
+      <span>Made for keeping. © 2026</span>
+    </div>
+  </footer>
+</div>
+
+<%- include('partials/foot') %>

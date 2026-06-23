@@ -1,0 +1,65 @@
+<%- include('partials/head', { title: 'Admin · Users' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Admin · Users', searchAction: '/admin/users' }) %>
+    <div class="content">
+      <div class="page">
+
+        <a href="/admin" class="btn-ghost" style="display:inline-block;margin-bottom:20px;">← Back to admin</a>
+
+        <% if (total) { %>
+          <div class="admin-table">
+            <div class="user-grid user-thead">
+              <span>User</span><span>Email</span><span>Phone</span><span>Role</span><span class="r-right">Stories</span><span></span>
+            </div>
+            <% users.forEach(function(u){ %>
+              <div class="user-grid user-row">
+                <span class="title"><%= u.name %> <span class="dim" style="font-weight:400;">@<%= u.username || u.handle || '—' %></span></span>
+                <span class="dim" data-label="Email"><%= u.email || '—' %></span>
+                <span class="dim" data-label="Phone"><%= u.phone || '—' %></span>
+                <span data-label="Role"><span class="role-badge <%= u.role === 'admin' ? 'admin' : '' %>"><%= u.role === 'admin' ? 'Admin' : 'Storyteller' %></span></span>
+                <span class="r-right dim" data-label="Stories"><%= u.storyCount %></span>
+                <span class="r-right user-actions">
+                  <a href="/admin/users/<%= u.id %>/edit" class="btn-roletoggle">Edit</a>
+                  <% if (u.isSelf) { %>
+                    <span class="dim" style="font-size:12px;">You</span>
+                  <% } else { %>
+                    <form action="/admin/users/<%= u.id %>/role" method="post" style="margin:0;">
+                      <input type="hidden" name="role" value="<%= u.role === 'admin' ? 'storyteller' : 'admin' %>">
+                      <button type="submit" class="btn-roletoggle"><%= u.role === 'admin' ? 'Remove admin' : 'Make admin' %></button>
+                    </form>
+                    <button type="button" class="btn-delete"
+                            data-confirm
+                            data-title="Delete this user?"
+                            data-body="Deleting “<%= u.name %>” permanently removes their account, all their stories and media. This can’t be undone."
+                            data-action="/admin/users/<%= u.id %>/delete">Delete</button>
+                  <% } %>
+                </span>
+              </div>
+            <% }) %>
+          </div>
+
+          <% if (totalPages > 1) { %>
+            <% var qs = function(p){ return '/admin/users?page=' + p + (query ? ('&q=' + encodeURIComponent(query)) : ''); }; %>
+            <nav class="pager">
+              <% if (page > 1) { %><a class="pager-btn" href="<%= qs(page - 1) %>">← Prev</a><% } else { %><span class="pager-btn disabled">← Prev</span><% } %>
+              <% for (var p = 1; p <= totalPages; p++) { %>
+                <% if (p === page) { %><span class="pager-num active"><%= p %></span><% } else { %><a class="pager-num" href="<%= qs(p) %>"><%= p %></a><% } %>
+              <% } %>
+              <% if (page < totalPages) { %><a class="pager-btn" href="<%= qs(page + 1) %>">Next →</a><% } else { %><span class="pager-btn disabled">Next →</span><% } %>
+            </nav>
+            <div class="pager-info">Page <%= page %> of <%= totalPages %> · <%= total %> users</div>
+          <% } %>
+        <% } else { %>
+          <div class="empty">
+            <div class="et"><%= query ? 'No matching users' : 'No users yet' %></div>
+            <div class="eh"><%= query ? 'Try a different search.' : '' %></div>
+          </div>
+        <% } %>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

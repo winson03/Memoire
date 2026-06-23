@@ -1,0 +1,60 @@
+<%- include('partials/head', { title: 'Dashboard' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Dashboard', searchAction: '/dashboard' }) %>
+    <div class="content">
+      <div class="page">
+
+        <div class="dash-hero">
+          <div class="glow"></div>
+          <div style="position:relative;">
+            <div class="eyebrow"><%= greeting %>, <%= firstName.toUpperCase() %></div>
+            <div class="headline">You have <%= libCount %> <%= libCount === 1 ? 'story' : 'stories' %> in your library — <%= publishedCount %> <%= publishedCount === 1 ? 'is' : 'are' %> out in the world.</div>
+          </div>
+          <div class="newmenu">
+            <button type="button" class="cta" aria-haspopup="true" aria-expanded="false">Start writing</button>
+            <div class="newmenu-pop" hidden>
+              <a href="/editor">New story</a>
+              <a href="/editor?type=novel">New novel</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="row-between">
+          <h2 class="h2">Your library</h2>
+          <a href="/library" class="btn-link-accent">See all →</a>
+        </div>
+        <% if (yourBooks.length) { %>
+          <div class="cover-grid" style="margin-bottom:48px;">
+            <% yourBooks.forEach(function(book){ %>
+              <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'status-meta' } }) %>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="empty" style="margin-bottom:48px;">
+            <div class="ico">✦</div>
+            <div class="et">Your library is empty</div>
+            <div class="eh">Start your first story to see it here.</div>
+          </div>
+        <% } %>
+
+        <div class="row-between">
+          <h2 class="h2">Discover published stories</h2>
+          <a href="/discover" class="btn-link-accent">See all →</a>
+        </div>
+        <% if (discover.length) { %>
+          <div class="cover-grid">
+            <% discover.forEach(function(book){ %>
+              <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'meta' } }) %>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="empty"><div class="et">No published stories yet</div><div class="eh">Published stories from everyone will appear here.</div></div>
+        <% } %>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

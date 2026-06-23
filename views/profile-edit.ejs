@@ -1,0 +1,87 @@
+<%- include('partials/head', { title: 'Edit profile' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Edit profile', searchAction: '/dashboard' }) %>
+    <div class="content">
+      <div class="page">
+        <form method="post" action="/profile" enctype="multipart/form-data">
+
+          <section class="settings-section">
+            <h3>Profile photo</h3>
+            <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+              <% if (avatarUrl(currentUser)) { %>
+                <div class="profile-avatar" id="avatarPreview" style="background-image:url(<%= avatarUrl(currentUser) %>);background-size:cover;background-position:center;"></div>
+              <% } else { %>
+                <div class="profile-avatar" id="avatarPreview"><%= currentUser.initials || 'U' %></div>
+              <% } %>
+              <div>
+                <input type="file" id="avatarInput" name="avatar" accept="image/*" hidden>
+                <button type="button" class="btn btn-soft" id="avatarBtn">⤓ Upload photo</button>
+                <div style="font-size:12.5px;color:rgba(58,50,42,0.45);margin-top:8px;">JPG or PNG. Stored securely in your private library.</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <h3>Details</h3>
+            <div class="settings-fields">
+              <div class="settings-field">
+                <label class="field-label" style="font-size:12px;">Name</label>
+                <input class="input" name="name" value="<%= currentUser.name || '' %>" required>
+              </div>
+              <div class="settings-field">
+                <label class="field-label" style="font-size:12px;">Email</label>
+                <input class="input" type="email" value="<%= currentUser.email || '' %>" placeholder="Not set" readonly style="opacity:.7;cursor:not-allowed;">
+                <div style="font-size:11.5px;color:rgba(58,50,42,0.45);margin-top:6px;">Email can’t be changed after sign-up.</div>
+              </div>
+            </div>
+            <div class="settings-fields" style="margin-top:16px;">
+              <div class="settings-field">
+                <label class="field-label" style="font-size:12px;">Phone number</label>
+                <input class="input" type="tel" name="phone" value="<%= currentUser.phone || '' %>" placeholder="+60 12 345 6789">
+              </div>
+              <div class="settings-field">
+                <label class="field-label" style="font-size:12px;">Date of birth</label>
+                <input class="input" type="date" name="dob" value="<%= currentUser.dob || '' %>">
+              </div>
+            </div>
+            <div style="margin-top:16px;">
+              <label class="field-label" style="font-size:12px;">Bio</label>
+              <textarea class="input" name="bio" rows="3" placeholder="Tell readers who you are…"><%= currentUser.bio || '' %></textarea>
+            </div>
+          </section>
+
+          <div class="btn-group">
+            <button type="submit" class="btn btn-accent">Save profile</button>
+            <a href="/profile" class="btn btn-soft">Cancel</a>
+          </div>
+        </form>
+
+        <form method="post" action="/profile/password" class="settings-section" autocomplete="off" style="margin-top:28px;">
+          <h3><%= currentUser.password_hash ? 'Change password' : 'Set a password' %></h3>
+          <% if (currentUser.password_hash) { %>
+            <div style="margin-bottom:16px;">
+              <label class="field-label" style="font-size:12px;">Current password</label>
+              <input class="input" type="password" name="current_password" autocomplete="current-password" required>
+            </div>
+          <% } %>
+          <div class="settings-fields">
+            <div class="settings-field">
+              <label class="field-label" style="font-size:12px;">New password</label>
+              <input class="input" type="password" name="new_password" placeholder="At least 6 characters" autocomplete="new-password" required>
+            </div>
+            <div class="settings-field">
+              <label class="field-label" style="font-size:12px;">Confirm new password</label>
+              <input class="input" type="password" name="confirm_password" autocomplete="new-password" required>
+            </div>
+          </div>
+          <div class="btn-group" style="margin-top:18px;">
+            <button type="submit" class="btn btn-accent"><%= currentUser.password_hash ? 'Update password' : 'Set password' %></button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

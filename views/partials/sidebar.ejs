@@ -1,0 +1,64 @@
+<%
+  var p = path || '';
+  function isActive(key) {
+    if (key === 'dashboard') return p.startsWith('/dashboard') || p.startsWith('/library') || p.startsWith('/reader') || p.startsWith('/editor');
+    if (key === 'admin') return p === '/admin'; // not /admin/users
+    return p.startsWith('/' + key);
+  }
+  var u = currentUser || { name: 'Guest', initials: 'G', role: 'storyteller' };
+  var navItems = [
+    { key: 'dashboard',  label: 'Dashboard',              href: '/dashboard' },
+    { key: 'discover',   label: 'Discover',               href: '/discover' },
+    { key: 'folders',    label: 'Folders & Collections',  href: '/folders' },
+    { key: 'favourites', label: 'Favourites',             href: '/favourites' },
+    { key: 'reports',    label: 'Reports',                href: '/reports' },
+  ];
+  // Admin links are only meaningful for admins — don't show dead links to everyone.
+  if (u.role === 'admin') {
+    navItems.push({ key: 'admin', label: 'Overview', href: '/admin' });
+    navItems.push({ key: 'admin/users', label: 'Users', href: '/admin/users' });
+  }
+  // Profile + Settings always sit at the bottom.
+  navItems.push({ key: 'profile',  label: 'Profile',  href: '/profile' });
+  navItems.push({ key: 'settings', label: 'Settings', href: '/settings' });
+  var roleText = 'Storyteller';
+%>
+<aside class="sidebar" id="sidebar">
+  <a href="/dashboard" class="sidebar-logo">
+    <div class="logo-mark">M</div>
+    <span class="logo-word">Mémoire</span>
+  </a>
+  <div class="new-btn-row">
+    <a href="/editor" class="new-story-btn"><span>+</span> New story</a>
+    <a href="/editor?type=novel" class="new-story-btn new-novel-btn"><span>+</span> New novel</a>
+  </div>
+  <nav class="nav">
+    <% navItems.forEach(function(n){ %>
+      <a href="<%= n.href %>" class="nav-item <%= isActive(n.key) ? 'active' : '' %>">
+        <span class="nav-dot"></span><%= n.label %>
+      </a>
+    <% }) %>
+  </nav>
+  <div class="sidebar-bottom">
+    <% if (u.role === 'admin') { %>
+      <div class="storage-pill <%= storageConnected ? '' : 'off' %>">
+        <span class="live"></span>
+        <span><%= storageConnected ? 'Storage connected' : 'Storage offline' %></span>
+      </div>
+    <% } %>
+    <a href="/profile" class="user-row">
+      <% if (avatarUrl(u)) { %>
+        <div class="avatar" style="background-image:url(<%= avatarUrl(u) %>);background-size:cover;background-position:center;"></div>
+      <% } else { %>
+        <div class="avatar"><%= u.initials || 'U' %></div>
+      <% } %>
+      <div class="meta">
+        <div class="name"><%= u.name %></div>
+        <div class="role"><%= roleText %></div>
+      </div>
+    </a>
+    <form action="/auth/logout" method="post" style="margin:0;">
+      <button type="submit" class="signout-btn">Sign out</button>
+    </form>
+  </div>
+</aside>

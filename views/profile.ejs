@@ -1,0 +1,57 @@
+<%- include('partials/head', { title: 'Profile' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Profile', searchAction: '/profile' }) %>
+    <div class="content">
+      <div class="page">
+
+        <div class="profile-head">
+          <% if (avatarUrl(currentUser)) { %>
+            <div class="profile-avatar" style="background-image:url(<%= avatarUrl(currentUser) %>);background-size:cover;background-position:center;"></div>
+          <% } else { %>
+            <div class="profile-avatar"><%= currentUser.initials || 'U' %></div>
+          <% } %>
+          <div class="profile-info">
+            <h2><%= currentUser.name %></h2>
+            <div class="handle">@<%= currentUser.handle || (currentUser.name || 'user').toLowerCase().replace(/\s+/g,'') %> · <%= currentUser.role === 'admin' ? 'Storyteller & Admin' : 'Storyteller' %></div>
+            <p><%= currentUser.bio || 'No bio yet — tell readers who you are.' %></p>
+          </div>
+          <a href="/profile/edit" class="btn btn-soft">Edit profile</a>
+        </div>
+
+        <section class="glass" style="padding:26px;margin-bottom:32px;">
+          <h3 class="h3" style="margin-bottom:18px;">Details</h3>
+          <div class="info-grid">
+            <div class="info-row"><span class="info-label">Username</span><span class="info-val">@<%= currentUser.username || currentUser.handle || '—' %></span></div>
+            <div class="info-row"><span class="info-label">Email</span><span class="info-val <%= currentUser.email ? '' : 'muted' %>"><%= currentUser.email || 'Not set' %></span></div>
+            <div class="info-row"><span class="info-label">Phone</span><span class="info-val <%= currentUser.phone ? '' : 'muted' %>"><%= currentUser.phone || 'Not set' %></span></div>
+            <div class="info-row"><span class="info-label">Date of birth</span><span class="info-val <%= currentUser.dob ? '' : 'muted' %>"><%= formatDob(currentUser.dob) || 'Not set' %></span></div>
+            <div class="info-row"><span class="info-label">Role</span><span class="info-val"><%= currentUser.role === 'admin' ? 'Admin' : 'Storyteller' %></span></div>
+          </div>
+        </section>
+
+        <div class="stat-grid">
+          <div class="stat-card"><div class="num"><%= stats.stories %></div><div class="lbl">Stories</div></div>
+          <div class="stat-card"><div class="num"><%= stats.published %></div><div class="lbl">Published</div></div>
+          <div class="stat-card"><div class="num"><%= stats.folders %></div><div class="lbl">Folders</div></div>
+          <div class="stat-card"><div class="num"><%= stats.readers.toLocaleString('en-US') %></div><div class="lbl">Readers</div></div>
+          <div class="stat-card"><div class="num"><%= stats.likes.toLocaleString('en-US') %></div><div class="lbl">Likes</div></div>
+        </div>
+
+        <h3 class="h3" style="font-size:23px;margin-bottom:22px;">Your stories</h3>
+        <% if (yourBooks.length) { %>
+          <div class="cover-grid">
+            <% yourBooks.forEach(function(book){ %>
+              <%- include('partials/cover-card', { book: book, opts: { showFav: false, foot: 'status', small: true } }) %>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="empty"><div class="et">No stories yet</div><div class="eh">Your published and draft stories will appear here.</div></div>
+        <% } %>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

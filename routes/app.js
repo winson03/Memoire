@@ -1,0 +1,462 @@
+'use strict';
+
+const express = require('express');
+const multer = require('multer');
+const router = express.Router();
+const { ensureAuth, ensureAdmin } = require('../middleware/auth');
+const { Users, Books, Folders, Collections, Favourites, Notifications, Media } = require('../lib/queries');
+const { greeting, firstName, storageStats } = require('../lib/view-helpers');
+const { statusLabel, readersTxt } = require('../lib/themes');
+const storage = require('../lib/storage');
+const bcrypt = require('bcryptjs');
+
+const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+function initialsFromName(name = '') {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'U';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Filter a list of books by the search query (title/author/series/collection).
+function filt(list, q) {
+  const query = (q || '').trim().toLowerCase();
+  if (!query) return list;
+  return list.filter((b) =>
+    `${b.title} ${b.author} ${b.series || ''} ${b.collection || ''}`.toLowerCase().includes(query));
+}
+
+// Parse a SQLite datetime ('YYYY-MM-DD HH:MM:SS', UTC) into a JS Date.
+function parseTs(s) {
+  if (!s) return null;
+  const d = new Date(String(s).replace(' ', 'T') + 'Z');
+  return isNaN(d) ? null : d;
+}
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const startOfWeek = (d) => { const x = startOfDay(d); const dow = (x.getDay() + 6) % 7; return addDays(x, -dow); }; // Monday
+
+// Build empty time buckets for a range (day/week/month/year).
+function buildBuckets(range) {
+  const now = new Date();
+  const buckets = [];
+  if (range === 'week') {
+    for (let i = 11; i >= 0; i--) { const s = startOfWeek(addDays(now, -i * 7)); buckets.push({ start: s, end: addDays(s, 7), label: `${s.getDate()}/${s.getMonth() + 1}`, count: 0 }); }
+  } else if (range === 'month') {
+    for (let i = 11; i >= 0; i--) { const s = new Date(now.getFullYear(), now.getMonth() - i, 1); buckets.push({ start: s, end: new Date(s.getFullYear(), s.getMonth() + 1, 1), label: s.toLocaleString('en-US', { month: 'short' }), count: 0 }); }
+  } else if (range === 'year') {
+    for (let i = 5; i >= 0; i--) { const y = now.getFullYear() - i; buckets.push({ start: new Date(y, 0, 1), end: new Date(y + 1, 0, 1), label: String(y), count: 0 }); }
+  } else { // day — last 14 days
+    for (let i = 13; i >= 0; i--) { const s = startOfDay(addDays(now, -i)); buckets.push({ start: s, end: addDays(s, 1), label: `${s.getDate()}/${s.getMonth() + 1}`, count: 0 }); }
+  }
+  return buckets;
+}
+
+// Count a list of timestamp strings into range buckets → [{ label, count }].
+function bucketCounts(tsList, range) {
+  const buckets = buildBuckets(range);
+  tsList.forEach((s) => {
+    const t = parseTs(s);
+    if (!t) return;
+    const bk = buckets.find((x) => t >= x.start && t < x.end);
+    if (bk) bk.count++;
+  });
+  return buckets.map((b) => ({ label: b.label, count: b.count }));
+}
+
+const isTodayTs = (s) => { const t = parseTs(s); const start = startOfDay(new Date()); return !!t && t >= start && t < addDays(start, 1); };
+
+router.use(ensureAuth);
+
+// ── Dashboard ────────────────────────────────────────────────────────────────
+router.get('/dashboard', (req, res) => {
+  const u = req.user;
+  const q = req.query.q || '';
+  const mine = Books.listByUser(u.id);
+  // Dashboard shows just a few of your latest books; the full list lives on /library.
+  const yourBooks = filt(mine, q).sort((a, b) => b.id - a.id).slice(0, 5);
+  // Dashboard shows only the hottest published stories (most readers); the full
+  // list lives on the paginated /discover page.
+  const hot = filt(Books.listPublished(), q)
+    .sort((a, b) => (b.views || 0) - (a.views || 0))
+    .slice(0, 5);
+  res.render('dashboard', {
+    greeting: greeting(),
+    firstName: firstName(u.name),
+    libCount: mine.length,
+    publishedCount: mine.filter((b) => b.status === 'published').length,
+    yourBooks,
+    discover: hot,
+  });
+});
+
+// ── Library (all of your own stories, paginated) ──────────────────────────────
+router.get('/library', (req, res) => {
+  const q = req.query.q || '';
+  const perPage = 10;
+  const all = filt(Books.listByUser(req.user.id), q).sort((a, b) => b.id - a.id);
+  const total = all.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+  const books = all.slice((page - 1) * perPage, page * perPage);
+  res.render('library', { books, page, totalPages, total, query: q });
+});
+
+// ── Discover (all published stories, paginated) ───────────────────────────────
+router.get('/discover', (req, res) => {
+  const q = req.query.q || '';
+  const perPage = 10;
+  const all = filt(Books.listPublished(), q).sort((a, b) => b.id - a.id); // newest first
+  const total = all.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+  const books = all.slice((page - 1) * perPage, page * perPage);
+  res.render('discover', { books, page, totalPages, total, query: q });
+});
+
+// ── Folders & Collections ─────────────────────────────────────────────────────
+// Hierarchy: Collection → Folders → Stories.
+router.get('/folders', (req, res) => {
+  const u = req.user;
+  const q = req.query.q || '';
+  const rawFolders = Folders.listForUser(u.id);
+  const rawCollections = Collections.listForUser(u.id);
+
+  // Build folder view-models (story count + cover thumbnails).
+  const folderVM = (f) => {
+    const fb = Books.listByFolder(f.id);
+    return { ...f, count: fb.length, covers: fb.slice(0, 3) };
+  };
+
+  // Collections with a count of folders inside + a few folder thumbnails.
+  const collections = rawCollections.map((c) => {
+    const inside = rawFolders.filter((f) => f.collection_id === c.id);
+    return { ...c, folderCount: inside.length, folderThemes: inside.slice(0, 3).map((f) => f.theme) };
+  });
+
+  // A collection can be selected to filter the folders list.
+  const selId = parseInt(req.query.collection, 10);
+  const selectedCollection = selId ? rawCollections.find((c) => c.id === selId) || null : null;
+
+  let folderSource = rawFolders;
+  if (selectedCollection) folderSource = rawFolders.filter((f) => f.collection_id === selectedCollection.id);
+  const folders = folderSource.map(folderVM);
+
+  // Open folder detail → its stories as one flat grid.
+  let openFolder = null;
+  let folderBooks = [];
+  const openId = parseInt(req.query.open, 10);
+  if (openId) {
+    const f = rawFolders.find((x) => x.id === openId);
+    if (f) { openFolder = f; folderBooks = filt(Books.listByFolder(f.id), q); }
+  }
+
+  res.render('folders', { collections, folders, selectedCollection, openFolder, folderBooks });
+});
+
+// ── Favourites ─────────────────────────────────────────────────────────────────
+router.get('/favourites', (req, res) => {
+  const q = req.query.q || '';
+  const ids = Favourites.idsForUser(req.user.id);
+  // A favourite stays visible only while it's public or owned by the user.
+  const all = Books.listAll().filter((b) => ids.includes(b.id) && (b.status === 'published' || b.user_id === req.user.id));
+  const favBooks = filt(all, q);
+  res.render('favourites', { favBooks, favCount: all.length });
+});
+
+// ── Profile ──────────────────────────────────────────────────────────────────
+router.get('/profile', (req, res) => {
+  const u = req.user;
+  const mine = Books.listByUser(u.id);
+  const stats = {
+    stories: mine.length,
+    published: mine.filter((b) => b.status === 'published').length,
+    folders: Folders.listForUser(u.id).length,
+    readers: mine.reduce((a, b) => a + (b.views || 0), 0),
+    likes: Favourites.countForUserStories(u.id),
+  };
+  res.render('profile', { yourBooks: mine, stats });
+});
+
+// ── Reports — today's views & likes per story ─────────────────────────────────
+router.get('/reports', (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  const scope = isAdmin && req.query.scope === 'all' ? 'all' : 'mine';
+  const range = ['day', 'week', 'month', 'year'].includes(req.query.chart) ? req.query.chart : 'day';
+  const userId = scope === 'all' ? null : req.user.id;
+
+  const viewTs = Books.viewTimestamps(userId);
+  const likeTs = Favourites.likeTimestamps(userId);
+
+  const viewsChart = bucketCounts(viewTs, range);
+  const likesChart = bucketCounts(likeTs, range);
+  const totalViewsToday = viewTs.filter(isTodayTs).length;
+  const totalLikesToday = likeTs.filter(isTodayTs).length;
+
+  res.render('reports', { isAdmin, scope, range, viewsChart, likesChart, totalViewsToday, totalLikesToday });
+});
+
+// ── Public author profile ───────────────────────────────────────────────────
+// A read-only view of any storyteller, reachable from a story byline. Shows
+// only their published stories and public stats — never email or phone.
+router.get('/u/:id', (req, res) => {
+  const author = Users.findById(parseInt(req.params.id, 10));
+  if (!author) return res.redirect('/dashboard');
+
+  const published = Books.listByUser(author.id).filter((b) => b.status === 'published');
+  const stats = {
+    published: published.length,
+    readers: published.reduce((a, b) => a + (b.views || 0), 0),
+    likes: published.reduce((a, b) => a + (b.likes || 0), 0),
+  };
+  res.render('author', { author, books: published, stats, isSelf: !!(req.user && req.user.id === author.id) });
+});
+
+// ── Notifications ────────────────────────────────────────────────────────────
+router.post('/notifications/read', (req, res) => {
+  Notifications.markAllRead(req.user.id);
+  res.redirect(req.get('Referer') || '/dashboard');
+});
+
+// Edit profile form.
+router.get('/profile/edit', (req, res) => {
+  res.render('profile-edit', {});
+});
+
+// Save profile — name, email, phone, date of birth, bio, and an optional avatar.
+router.post('/profile', avatarUpload.single('avatar'), async (req, res, next) => {
+  const name = (req.body.name || '').trim() || req.user.name;
+  const phone = (req.body.phone || '').trim() || null;
+  const dob = (req.body.dob || '').trim() || null;
+  const bio = (req.body.bio || '').trim() || null;
+
+  try {
+    // Email is fixed after sign-up — not updated here (admins change it via Users → Edit).
+    Users.updateProfile(req.user.id, { name, phone, dob, bio, initials: initialsFromName(name) });
+
+    if (req.file) {
+      if (!(req.file.mimetype || '').startsWith('image/')) {
+        req.flash('error', 'Profile image must be an image file.');
+        return res.redirect('/profile/edit');
+      }
+      const tg = await storage.uploadBuffer(req.file.buffer, req.file.originalname, req.file.mimetype, { asDocument: true });
+      Users.setAvatar(req.user.id, tg.file_id, tg.mime);
+    }
+    req.flash('info', 'Profile updated.');
+    res.redirect('/profile');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Change (or first-time set) the account password.
+router.post('/profile/password', (req, res) => {
+  const current = req.body.current_password || '';
+  const next = req.body.new_password || '';
+  const confirm = req.body.confirm_password || '';
+  const hasPassword = !!req.user.password_hash;
+
+  const fail = (msg) => { req.flash('error', msg); return res.redirect('/profile/edit'); };
+
+  if (hasPassword && !bcrypt.compareSync(current, req.user.password_hash)) return fail('Current password is incorrect.');
+  if (next.length < 6) return fail('New password must be at least 6 characters.');
+  if (next !== confirm) return fail('New passwords do not match.');
+
+  Users.setPassword(req.user.id, bcrypt.hashSync(next, 10));
+  req.flash('info', hasPassword ? 'Password updated.' : 'Password set.');
+  res.redirect('/profile/edit');
+});
+
+// Stream a user's profile image from Telegram.
+router.get('/users/:id/avatar', async (req, res) => {
+  const user = Users.findById(parseInt(req.params.id, 10));
+  if (!user || !user.avatar_file_id) return res.status(404).send('No avatar');
+  try {
+    await storage.streamTo(user.avatar_file_id, res, { mime: user.avatar_mime, inline: true });
+  } catch (err) {
+    if (!res.headersSent) res.status(502).send('Could not load avatar.');
+  }
+});
+
+// ── Admin ──────────────────────────────────────────────────────────────────────
+router.get('/admin', ensureAdmin, (req, res) => {
+  const q = req.query.q || '';
+  const books = Books.listAll();
+  const folders = Folders.listForUser(req.user.id);
+  const folderName = (id) => (folders.find((f) => f.id === id) || {}).name;
+
+  const adminStats = [
+    { label: 'Total stories', value: String(books.length) },
+    { label: 'Published', value: String(books.filter((b) => b.status === 'published').length) },
+    { label: 'Drafts & private', value: String(books.filter((b) => b.status !== 'published').length) },
+    { label: 'Total readers', value: books.reduce((a, b) => a + (b.views || 0), 0).toLocaleString('en-US') },
+  ];
+
+  adminStats.push({ label: 'Users', value: String(Users.listAll().length) });
+
+  // Paginated stories table (10 per page), newest first.
+  const filtered = filt(books, q).map((b) => ({ ...b, folderName: folderName(b.folder_id) })).sort((a, b) => b.id - a.id);
+  const perPage = 10;
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+  const adminRows = filtered.slice((page - 1) * perPage, page * perPage);
+
+  // Publish chart (daily / weekly / monthly / yearly).
+  const chartRange = ['day', 'week', 'month', 'year'].includes(req.query.chart) ? req.query.chart : 'day';
+  const publishedBooks = books.filter((b) => b.status === 'published' && b.published_at);
+  const chart = bucketCounts(publishedBooks.map((b) => b.published_at), chartRange);
+  const todayKey = new Date();
+  const publishedToday = publishedBooks.filter((b) => {
+    const t = parseTs(b.published_at);
+    return t && t >= startOfDay(todayKey) && t < addDays(startOfDay(todayKey), 1);
+  }).length;
+
+  res.render('admin', {
+    adminStats, adminRows, storage: storageStats(), page, totalPages, total, query: q,
+    chart, chartRange, publishedToday,
+  });
+});
+
+// Admin: change a story's visibility (published / private / draft) for any user.
+router.post('/admin/stories/:id/status', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const status = ['published', 'private', 'draft'].includes(req.body.status) ? req.body.status : null;
+  const book = Books.findById(id);
+  if (book && status) Books.setStatus(id, status);
+  res.redirect(req.get('Referer') || '/admin');
+});
+
+// Admin: delete any user's story (bypasses the owner-only check on /stories/:id/delete).
+router.post('/admin/stories/:id/delete', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const book = Books.findById(id);
+  if (book) {
+    Media.listForBook(id).forEach((m) => storage.remove(m.telegram_file_id));
+    Books.remove(id);
+  }
+  res.redirect(req.get('Referer') || '/admin');
+});
+
+// Admin: users management — paginated (10 per page), searchable.
+router.get('/admin/users', ensureAdmin, (req, res) => {
+  const q = (req.query.q || '').trim();
+  const books = Books.listAll();
+  let all = Users.listAll();
+  if (q) {
+    const ql = q.toLowerCase();
+    all = all.filter((u) => `${u.name} ${u.username || ''} ${u.email || ''} ${u.phone || ''}`.toLowerCase().includes(ql));
+  }
+  const perPage = 10;
+  const total = all.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+  const users = all.slice((page - 1) * perPage, page * perPage).map((u) => ({
+    ...u,
+    storyCount: books.filter((b) => b.user_id === u.id).length,
+    isSelf: u.id === req.user.id,
+  }));
+  res.render('admin-users', { users, page, totalPages, total, query: q });
+});
+
+// Admin: edit a user's full profile.
+router.get('/admin/users/:id/edit', ensureAdmin, (req, res) => {
+  const u = Users.findById(parseInt(req.params.id, 10));
+  if (!u) { req.flash('error', 'User not found.'); return res.redirect('/admin/users'); }
+  res.render('admin-user-edit', { u, isSelf: u.id === req.user.id });
+});
+
+router.post('/admin/users/:id', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const target = Users.findById(id);
+  if (!target) { req.flash('error', 'User not found.'); return res.redirect('/admin/users'); }
+
+  const name = (req.body.name || '').trim() || target.name;
+  const username = (req.body.username || '').trim() || null;
+  const email = (req.body.email || '').trim().toLowerCase() || null;
+  const phone = (req.body.phone || '').trim() || null;
+  const dob = (req.body.dob || '').trim() || null;
+  const bio = (req.body.bio || '').trim() || null;
+  const newPassword = req.body.new_password || '';
+  // Can't change your own role here (avoids locking yourself out of admin).
+  const role = id === req.user.id ? target.role : (req.body.role === 'admin' ? 'admin' : 'storyteller');
+
+  const fail = (msg) => { req.flash('error', msg); return res.redirect('/admin/users/' + id + '/edit'); };
+
+  if (username && !/^[A-Za-z0-9_.-]{3,32}$/.test(username)) return fail('Username must be 3–32 characters (letters, numbers, . _ -).');
+  if (username) { const c = Users.findByUsername(username); if (c && c.id !== id) return fail('That username is taken.'); }
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('Please enter a valid email address.');
+  if (email) { const c = Users.findByEmail(email); if (c && c.id !== id) return fail('That email is already in use.'); }
+  if (newPassword && newPassword.length < 6) return fail('New password must be at least 6 characters.');
+
+  Users.adminUpdate(id, { name, username, handle: username || target.handle, email, phone, dob, bio, role, initials: initialsFromName(name) });
+  if (newPassword) Users.setPassword(id, bcrypt.hashSync(newPassword, 10));
+  req.flash('info', `Updated ${name}.`);
+  res.redirect('/admin/users');
+});
+
+// Admin: promote / demote a user's role.
+router.post('/admin/users/:id/role', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (id === req.user.id) {
+    req.flash('error', 'You can’t change your own role.');
+    return res.redirect(req.get('Referer') || '/admin/users');
+  }
+  const target = Users.findById(id);
+  if (!target) {
+    req.flash('error', 'User not found.');
+    return res.redirect('/admin/users');
+  }
+  const role = req.body.role === 'admin' ? 'admin' : 'storyteller';
+  Users.setRole(id, role);
+  req.flash('info', `${target.name} is now ${role === 'admin' ? 'an admin' : 'a storyteller'}.`);
+  res.redirect(req.get('Referer') || '/admin/users');
+});
+
+// Admin: delete a user (and their stories/media).
+router.post('/admin/users/:id/delete', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (id === req.user.id) {
+    req.flash('error', 'You can’t delete your own account here.');
+    return res.redirect(req.get('Referer') || '/admin/users');
+  }
+  const target = Users.findById(id);
+  if (!target) {
+    req.flash('error', 'User not found.');
+    return res.redirect('/admin/users');
+  }
+  // Remove this user's media files from disk before the rows cascade away.
+  Books.listByUser(id).forEach((b) => Media.listForBook(b.id).forEach((m) => storage.remove(m.telegram_file_id)));
+  if (target.avatar_file_id) storage.remove(target.avatar_file_id);
+  Users.remove(id);
+  req.flash('info', `Deleted ${target.name} and their stories.`);
+  res.redirect('/admin/users');
+});
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+router.get('/settings', (req, res) => {
+  res.render('settings', { storage: storageStats() });
+});
+
+router.post('/settings/account', (req, res) => {
+  Users.updateProfile(req.user.id, { name: req.body.name || req.user.name, bio: req.user.bio });
+  req.flash('info', 'Account updated.');
+  res.redirect('/settings');
+});
+
+router.post('/settings/reconnect', (req, res) => {
+  req.flash('info', 'Storage is local — always connected.');
+  res.redirect('/settings');
+});
+
+router.post('/settings/delete-account', (req, res, next) => {
+  const userId = req.user.id;
+  req.logout((err) => {
+    if (err) return next(err);
+    Users.byId && require('../lib/queries').db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    res.redirect('/');
+  });
+});
+
+module.exports = router;

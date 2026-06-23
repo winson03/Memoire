@@ -1,0 +1,86 @@
+<%- include('partials/head', { title: 'Overview' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Overview', searchAction: '/admin' }) %>
+    <div class="content">
+      <div class="page">
+
+        <div class="stat-grid" style="margin-bottom:20px;">
+          <% adminStats.forEach(function(st){ %>
+            <div class="stat-card"><div class="num"><%= st.value %></div><div class="lbl"><%= st.label %></div></div>
+          <% }) %>
+        </div>
+
+        <section class="chart-card">
+          <div class="chart-head">
+            <div>
+              <h3 class="chart-title">Stories published</h3>
+              <div class="chart-sub"><strong><%= publishedToday %></strong> published today</div>
+            </div>
+            <div class="chart-toggle">
+              <% ['day','week','month','year'].forEach(function(r){ %>
+                <a href="/admin?chart=<%= r %>" class="chart-tab <%= chartRange === r ? 'active' : '' %>"><%= ({day:'Daily',week:'Weekly',month:'Monthly',year:'Yearly'})[r] %></a>
+              <% }) %>
+            </div>
+          </div>
+          <% var maxCount = Math.max(1, ...chart.map(function(c){ return c.count; })); %>
+          <div class="chart">
+            <% chart.forEach(function(c){ %>
+              <div class="bar-wrap">
+                <div class="bar-val"><%= c.count || '' %></div>
+                <div class="bar" style="height: <%= Math.round((c.count / maxCount) * 100) %>%;" title="<%= c.label %>: <%= c.count %>"></div>
+                <div class="bar-label"><%= c.label %></div>
+              </div>
+            <% }) %>
+          </div>
+        </section>
+
+        <div class="admin-table">
+          <div class="admin-grid admin-thead">
+            <span>Story</span><span>Author</span><span>Folder</span><span>Visibility</span><span class="r-right">Readers</span><span class="r-right">Likes</span><span></span>
+          </div>
+          <% adminRows.forEach(function(r){ %>
+            <div class="admin-grid admin-row">
+              <span class="title"><%= r.title %></span>
+              <span class="dim" data-label="Author"><%= r.author %></span>
+              <span class="dim" data-label="Folder"><%= r.folderName || '—' %></span>
+              <span data-label="Visibility">
+                <form action="/admin/stories/<%= r.id %>/status" method="post" style="margin:0;">
+                  <select name="status" class="status-select" onchange="this.form.submit()" aria-label="Story visibility">
+                    <option value="published" <%= r.status === 'published' ? 'selected' : '' %>>Published</option>
+                    <option value="private" <%= r.status === 'private' ? 'selected' : '' %>>Private</option>
+                    <option value="draft" <%= r.status === 'draft' ? 'selected' : '' %>>Draft</option>
+                  </select>
+                </form>
+              </span>
+              <span class="r-right dim" data-label="Readers"><%= readersTxt(r) %></span>
+              <span class="r-right dim" data-label="Likes">♥ <%= r.likes || 0 %></span>
+              <span class="r-right">
+                <button type="button" class="btn-delete"
+                        data-confirm
+                        data-title="Delete this story?"
+                        data-body="“<%= r.title %>” and all its media will be permanently removed. This can’t be undone."
+                        data-action="/admin/stories/<%= r.id %>/delete">Delete</button>
+              </span>
+            </div>
+          <% }) %>
+        </div>
+
+        <% if (totalPages > 1) { %>
+          <% var qs = function(p){ return '/admin?page=' + p + (query ? ('&q=' + encodeURIComponent(query)) : ''); }; %>
+          <nav class="pager">
+            <% if (page > 1) { %><a class="pager-btn" href="<%= qs(page - 1) %>">← Prev</a><% } else { %><span class="pager-btn disabled">← Prev</span><% } %>
+            <% for (var p = 1; p <= totalPages; p++) { %>
+              <% if (p === page) { %><span class="pager-num active"><%= p %></span><% } else { %><a class="pager-num" href="<%= qs(p) %>"><%= p %></a><% } %>
+            <% } %>
+            <% if (page < totalPages) { %><a class="pager-btn" href="<%= qs(page + 1) %>">Next →</a><% } else { %><span class="pager-btn disabled">Next →</span><% } %>
+          </nav>
+          <div class="pager-info">Page <%= page %> of <%= totalPages %> · <%= total %> stories</div>
+        <% } %>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

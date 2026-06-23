@@ -1,0 +1,64 @@
+<header class="topbar">
+  <div style="display:flex;align-items:center;gap:14px;">
+    <button class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+    <h1><%= pageTitle %></h1>
+  </div>
+  <div class="topbar-right">
+    <form class="search" id="searchForm" action="<%= typeof searchAction !== 'undefined' ? searchAction : path %>" method="get">
+      <span class="glyph">⌕</span>
+      <input type="text" id="searchInput" name="q" value="<%= query || '' %>" placeholder="Search stories, authors…" autocomplete="off">
+    </form>
+
+    <div class="notif" id="notif">
+      <button type="button" class="notif-bell" id="notifBell" aria-label="Notifications" aria-expanded="false">
+        <svg class="notif-icon" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.7 21a2 2 0 0 1-3.4 0"></path>
+        </svg>
+        <% if (typeof notifUnread !== 'undefined' && notifUnread > 0) { %>
+          <span class="notif-badge"><%= notifUnread > 9 ? '9+' : notifUnread %></span>
+        <% } %>
+      </button>
+      <div class="notif-panel" id="notifPanel" hidden>
+        <div class="notif-head">
+          <span>Notifications</span>
+          <% if (typeof notifUnread !== 'undefined' && notifUnread > 0) { %>
+            <form action="/notifications/read" method="post" style="margin:0;">
+              <button type="submit" class="notif-mark">Mark all as read</button>
+            </form>
+          <% } %>
+        </div>
+        <div class="notif-list">
+          <% if (!notifications || !notifications.length) { %>
+            <div class="notif-empty">You’re all caught up.</div>
+          <% } else { %>
+            <% notifications.forEach(function(n){ %>
+              <%
+                var isLike = n.type === 'like';
+                var href = (isLike && n.book_id) ? ('/reader/' + n.book_id) : '#';
+                var icon = isLike ? '♥' : '🎂';
+                var text = n.message;
+                if (isLike) { text = (n.actor_name || 'Someone') + ' liked “' + (n.book_title || 'your story') + '”'; }
+              %>
+              <a class="notif-item <%= n.is_read ? '' : 'unread' %>" href="<%= href %>">
+                <span class="notif-ic <%= isLike ? 'like' : 'cake' %>"><%= icon %></span>
+                <span class="notif-body">
+                  <span class="notif-text"><%= text %></span>
+                  <span class="notif-time"><%= relativeTime(n.created_at) %></span>
+                </span>
+              </a>
+            <% }) %>
+          <% } %>
+        </div>
+      </div>
+    </div>
+
+    <div class="newmenu">
+      <button type="button" class="btn-new-sm" aria-haspopup="true" aria-expanded="false">+ New</button>
+      <div class="newmenu-pop" hidden>
+        <a href="/editor">Story</a>
+        <a href="/editor?type=novel">Novel</a>
+      </div>
+    </div>
+  </div>
+</header>
