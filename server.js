@@ -103,7 +103,7 @@ try { seedAdmin(); } catch (e) { console.error('[seed-admin]', e.message); }
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
   console.log(`\n  Mémoire is running → http://localhost:${PORT}`);
-  console.log(`  Media storage:    local disk (${storage.MEDIA_DIR})`);
+  console.log(`  Media storage:    ${storage.backend === 'telegram' ? 'Telegram' : `local disk (${storage.MEDIA_DIR})`}`);
   console.log(`  Google sign-in:   ${require('./lib/passport').hasGoogle ? 'enabled' : 'disabled'}\n`);
 });
 
