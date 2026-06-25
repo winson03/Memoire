@@ -150,7 +150,7 @@
               <input type="file" id="mediaInput" multiple accept="image/*,video/*,application/pdf" hidden>
               <div class="media-grid" id="mediaGrid" data-book="<%= book.id %>">
                 <% photos.forEach(function(m, i){ %>
-                  <div class="media-tile" draggable="true" data-media-id="<%= m.id %>">
+                  <div class="media-tile" data-media-id="<%= m.id %>">
                     <div class="media-thumb">
                       <span class="media-badge"><%= i + 1 %></span>
                       <button type="button" class="media-remove" data-remove="<%= m.id %>" title="Remove">×</button>
@@ -161,7 +161,7 @@
                       <% } else { %>
                         <span class="media-kind"><%= (m.kind || 'file').toUpperCase() %></span>
                       <% } %>
-                      <span class="media-grip" title="Drag to reorder">⠿</span>
+                      <span class="media-grip" title="Hold &amp; drag to reorder">⠿</span>
                     </div>
                     <div class="media-name"><%= m.label || m.file_name || 'Untitled' %></div>
                   </div>

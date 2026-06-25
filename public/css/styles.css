@@ -302,13 +302,17 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .media-head .t { font-size: 15px; font-weight: 600; color: var(--ink); }
 .media-hint { font-size: 12.5px; color: rgba(58,50,42,0.42); margin-bottom: 18px; }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px,1fr)); gap: 14px; }
-.media-tile { cursor: grab; border-radius: 13px; overflow: hidden; border: 1px solid rgba(255,255,255,0.75); background: rgba(255,255,255,0.55); backdrop-filter: blur(8px); box-shadow: 0 6px 18px rgba(120,80,50,0.07); transition: box-shadow .2s; }
+/* touch-action lets the page scroll on a swipe; a press-and-hold (handled in
+   JS) is what lifts a tile, so quick scrolls are never hijacked. */
+.media-tile { cursor: grab; touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; border-radius: 13px; overflow: hidden; border: 1px solid rgba(255,255,255,0.75); background: rgba(255,255,255,0.55); backdrop-filter: blur(8px); box-shadow: 0 6px 18px rgba(120,80,50,0.07); transition: box-shadow .2s; }
 .media-tile:active { cursor: grabbing; }
 .media-tile:hover { box-shadow: 0 10px 24px rgba(120,80,50,0.14); }
-/* The tile being dragged becomes a dashed, dimmed drop placeholder. */
-.media-tile.dragging { opacity: .4; cursor: grabbing; box-shadow: none; outline: 2px dashed var(--accent); outline-offset: -2px; }
-.media-tile.dragging .media-grip, .media-tile.dragging .media-remove, .media-tile.dragging .media-badge { opacity: 0; }
+/* The lifted tile floats above the grid and follows the pointer. */
+.media-tile.lifted { position: fixed; z-index: 60; margin: 0; pointer-events: none; cursor: grabbing; opacity: .97; transform: scale(1.04); box-shadow: 0 18px 40px rgba(120,80,50,0.28); transition: transform .12s ease, box-shadow .12s ease; }
+/* The dashed slot showing where the lifted tile will drop. */
+.media-placeholder { border: 2px dashed var(--accent); background: rgba(190,140,90,0.08); box-shadow: none; backdrop-filter: none; }
 /* While reordering, suppress hover so only FLIP transforms move tiles. */
+.media-grid.reordering { -webkit-user-select: none; user-select: none; }
 .media-grid.reordering .media-tile { cursor: grabbing; }
 .media-grid.reordering .media-tile:hover { box-shadow: 0 6px 18px rgba(120,80,50,0.07); }
 .media-thumb { position: relative; aspect-ratio: 3/2; background: rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; border-bottom: 1px solid rgba(255,255,255,0.6); overflow: hidden; }
