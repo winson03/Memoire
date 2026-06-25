@@ -599,7 +599,7 @@ function initMedia() {
       }
       showProgress(0, 0);
       input.value = '';
-      renumber();
+      refreshOrders();
     });
   }
 
@@ -624,6 +624,7 @@ function initMedia() {
       tile.replaceWith(tiles[0]);
       for (let k = 1; k < tiles.length; k++) tiles[k - 1].after(tiles[k]);
       items.forEach((m) => bindTile(grid.querySelector(`[data-media-id="${m.id}"]`)));
+      refreshOrders();
     } catch (err) {
       tile.classList.remove('uploading');
       tile.classList.add('failed');
@@ -666,23 +667,22 @@ function initMedia() {
     el.dataset.mediaId = m.id;
     el.innerHTML = `
       <div class="media-thumb">
-        <span class="media-badge"></span>
+        <select class="media-order" aria-label="Position"></select>
         <button type="button" class="media-remove" data-remove="${m.id}" title="Remove">×</button>
         ${thumbInner(m)}
-        <span class="media-grip" title="Hold &amp; drag to reorder">⠿</span>
       </div>
       <div class="media-name">${escapeHtml(m.label || m.file_name || 'Untitled')}</div>`;
     return el;
   }
 
-  // Pointer-based reorder — one code path for mouse, touch and pen. (Native
-  // HTML5 drag-and-drop never fires on touch screens, which is why dragging
-  // felt broken on mobile.) On touch you press-and-hold a tile to pick it up;
-  // a quick swipe scrolls the page instead. With a mouse it picks up on the
-  // first few pixels of movement.
-  const LIFT_DELAY = 160;   // ms press-and-hold before a touch lifts a tile
-  const MOVE_SLOP = 8;      // px of pre-lift movement that counts as a scroll
-  let drag = null;
+  // Number-based reorder — each tile carries a position dropdown (1..n). Picking
+  // a new number moves that image there and shifts the rest to make room, e.g.
+  // changing image 5 to 2 pushes the old 2→3, 3→4, 4→5. Far friendlier on
+  // touch than dragging, and works identically on every device.
+  function orderableTiles() {
+    // Tiles still uploading / failed have no media id and don't take a slot.
+    return [...grid.querySelectorAll('.media-tile:not(.uploading):not(.failed)')];
+  }
 
   function bindTile(tile) {
     if (!tile) return;
@@ -693,135 +693,62 @@ function initMedia() {
         const id = removeBtn.dataset.remove;
         await fetch(`/stories/${bookId}/media/${id}/delete`, { method: 'POST' });
         flipMove(() => tile.remove());
-        renumber();
+        refreshOrders();
         saveOrder();
       });
     }
-    tile.addEventListener('pointerdown', (e) => onPointerDown(e, tile));
   }
 
-  function onPointerDown(e, tile) {
-    if (drag) return;
-    if (e.button != null && e.button > 0) return;        // primary button only
-    if (e.target.closest('button')) return;              // let the remove button work
-    if (tile.classList.contains('uploading') || tile.classList.contains('failed')) return;
-
-    const rect = tile.getBoundingClientRect();
-    drag = {
-      tile,
-      pointerId: e.pointerId,
-      startX: e.clientX, startY: e.clientY,
-      lastX: e.clientX, lastY: e.clientY,
-      offsetX: e.clientX - rect.left,
-      offsetY: e.clientY - rect.top,
-      width: rect.width, height: rect.height,
-      active: false, placeholder: null, timer: null,
-    };
-
-    if (e.pointerType === 'mouse') {
-      // Mouse picks up after a tiny nudge (handled in onPointerMove).
-    } else {
-      drag.timer = setTimeout(() => { if (drag && !drag.active) activate(); }, LIFT_DELAY);
-    }
-
-    window.addEventListener('pointermove', onPointerMove, { passive: false });
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
-  }
-
-  function activate() {
-    drag.active = true;
-    const tile = drag.tile;
-    if (drag.timer) { clearTimeout(drag.timer); drag.timer = null; }
-    try { tile.setPointerCapture(drag.pointerId); } catch (_) {}
-    grid.classList.add('reordering');
-
-    // A dashed placeholder holds the tile's slot while it floats with the pointer.
-    const ph = document.createElement('div');
-    ph.className = 'media-tile media-placeholder';
-    ph.style.height = drag.height + 'px';
-    grid.insertBefore(ph, tile);
-    drag.placeholder = ph;
-
-    tile.classList.add('lifted');
-    tile.style.width = drag.width + 'px';
-    tile.style.height = drag.height + 'px';
-    moveLifted(drag.lastX, drag.lastY);
-    renumber();
-  }
-
-  function moveLifted(x, y) {
-    drag.tile.style.left = (x - drag.offsetX) + 'px';
-    drag.tile.style.top = (y - drag.offsetY) + 'px';
-  }
-
-  function onPointerMove(e) {
-    if (!drag || e.pointerId !== drag.pointerId) return;
-    drag.lastX = e.clientX; drag.lastY = e.clientY;
-
-    if (!drag.active) {
-      const dist = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
-      if (e.pointerType === 'mouse') {
-        if (dist > 4) activate();
-      } else if (dist > MOVE_SLOP) {
-        endDrag();   // moved before the hold registered → user is scrolling
+  // Point every tile's dropdown at its current slot, rebuilding the 1..n option
+  // list whenever the number of images changes.
+  function refreshOrders() {
+    const tiles = orderableTiles();
+    const n = tiles.length;
+    tiles.forEach((tile, i) => {
+      const sel = tile.querySelector('.media-order');
+      if (!sel) return;
+      if (sel.options.length !== n) {
+        const frag = document.createDocumentFragment();
+        for (let k = 1; k <= n; k++) {
+          const o = document.createElement('option');
+          o.value = String(k);
+          o.textContent = String(k);
+          frag.appendChild(o);
+        }
+        sel.replaceChildren(frag);
       }
-      return;
-    }
-
-    e.preventDefault();  // suppress page scroll while a tile is lifted
-    moveLifted(e.clientX, e.clientY);
-
-    const t = dropTarget(e.clientX, e.clientY);
-    const ref = !t ? addTile : (t.after ? t.tile.nextElementSibling : t.tile);
-    if (ref === drag.placeholder || ref === drag.placeholder.nextElementSibling) return;
-    flipMove(() => grid.insertBefore(drag.placeholder, ref || addTile));
-    renumber();
+      sel.value = String(i + 1);
+    });
   }
 
-  function onPointerUp(e) {
-    if (!drag || e.pointerId !== drag.pointerId) return;
-    if (drag.active) {
-      const { tile, placeholder } = drag;
-      grid.insertBefore(tile, placeholder);
-      placeholder.remove();
-      tile.classList.remove('lifted');
-      tile.style.cssText = '';
-      grid.classList.remove('reordering');
-      renumber();
-      saveOrder();
-    }
-    endDrag();
+  // Move a tile to a new 0-based slot, shifting the others, then persist.
+  function moveTile(tile, toIndex) {
+    const tiles = orderableTiles();
+    const from = tiles.indexOf(tile);
+    if (from < 0) return;
+    toIndex = Math.max(0, Math.min(toIndex, tiles.length - 1));
+    if (from === toIndex) return;
+    tiles.splice(from, 1);
+    tiles.splice(toIndex, 0, tile);
+    flipMove(() => tiles.forEach((t) => grid.insertBefore(t, addTile)));
+    refreshOrders();
+    saveOrder();
   }
 
-  // Tear down listeners and, if a lift was aborted mid-flight, restore the tile.
-  function endDrag() {
-    if (!drag) return;
-    if (drag.timer) clearTimeout(drag.timer);
-    if (drag.active) {
-      drag.tile.classList.remove('lifted');
-      drag.tile.style.cssText = '';
-      if (drag.placeholder && drag.placeholder.isConnected) {
-        grid.insertBefore(drag.tile, drag.placeholder);
-        drag.placeholder.remove();
-      }
-      grid.classList.remove('reordering');
-      renumber();
-    }
-    window.removeEventListener('pointermove', onPointerMove);
-    window.removeEventListener('pointerup', onPointerUp);
-    window.removeEventListener('pointercancel', onPointerUp);
-    drag = null;
-  }
+  grid.addEventListener('change', (e) => {
+    const sel = e.target.closest('.media-order');
+    if (!sel) return;
+    const tile = sel.closest('.media-tile');
+    if (tile) moveTile(tile, parseInt(sel.value, 10) - 1);
+  });
 
-  // FLIP: smoothly animate tiles when the DOM order changes (the lifted tile
-  // follows the pointer directly, so it's excluded).
+  // FLIP: smoothly slide the tiles to their new spots when the order changes.
   function flipMove(mutate) {
-    const tiles = [...grid.querySelectorAll('.media-tile:not(.lifted)')];
+    const tiles = [...grid.querySelectorAll('.media-tile')];
     const first = new Map();
     tiles.forEach((t) => first.set(t, t.getBoundingClientRect()));
     mutate();
-    [...grid.querySelectorAll('.media-tile:not(.lifted)')].forEach((t) => {
+    [...grid.querySelectorAll('.media-tile')].forEach((t) => {
       const f = first.get(t);
       if (!f) return;
       const l = t.getBoundingClientRect();
@@ -837,44 +764,8 @@ function initMedia() {
     });
   }
 
-  // Nearest tile to the pointer (2D), then before/after by horizontal side.
-  function dropTarget(x, y) {
-    const tiles = [...grid.querySelectorAll('.media-tile:not(.lifted):not(.media-placeholder)')];
-    if (!tiles.length) return null;
-    let best = null;
-    let bestDist = Infinity;
-    for (const tile of tiles) {
-      const b = tile.getBoundingClientRect();
-      const cx = b.left + b.width / 2;
-      const cy = b.top + b.height / 2;
-      const d = Math.hypot(x - cx, y - cy);
-      if (d < bestDist) { bestDist = d; best = { tile, cx }; }
-    }
-    return { tile: best.tile, after: x > best.cx };
-  }
-
-  // Number the badges 1..n in DOM order. The lifted tile is numbered by where
-  // its placeholder currently sits.
-  function renumber() {
-    let n = 0;
-    grid.querySelectorAll('.media-tile').forEach((t) => {
-      if (t.classList.contains('lifted')) return;
-      n += 1;
-      if (t.classList.contains('media-placeholder')) {
-        if (drag && drag.tile) {
-          const b = drag.tile.querySelector('.media-badge');
-          if (b) b.textContent = n;
-        }
-        return;
-      }
-      const badge = t.querySelector('.media-badge');
-      if (badge) badge.textContent = n;
-    });
-  }
-
   async function saveOrder() {
-    const ids = [...grid.querySelectorAll('.media-tile')].map((t) => t.dataset.mediaId).filter(Boolean);
-    renumber();
+    const ids = orderableTiles().map((t) => t.dataset.mediaId).filter(Boolean);
     await fetch(`/stories/${bookId}/media/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -882,6 +773,6 @@ function initMedia() {
     });
   }
 
-  grid.querySelectorAll('.media-tile').forEach(bindTile);
-  renumber();
+  orderableTiles().forEach(bindTile);
+  refreshOrders();
 }

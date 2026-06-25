@@ -302,19 +302,8 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .media-head .t { font-size: 15px; font-weight: 600; color: var(--ink); }
 .media-hint { font-size: 12.5px; color: rgba(58,50,42,0.42); margin-bottom: 18px; }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px,1fr)); gap: 14px; }
-/* touch-action lets the page scroll on a swipe; a press-and-hold (handled in
-   JS) is what lifts a tile, so quick scrolls are never hijacked. */
-.media-tile { cursor: grab; touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; border-radius: 13px; overflow: hidden; border: 1px solid rgba(255,255,255,0.75); background: rgba(255,255,255,0.55); backdrop-filter: blur(8px); box-shadow: 0 6px 18px rgba(120,80,50,0.07); transition: box-shadow .2s; }
-.media-tile:active { cursor: grabbing; }
+.media-tile { border-radius: 13px; overflow: hidden; border: 1px solid rgba(255,255,255,0.75); background: rgba(255,255,255,0.55); backdrop-filter: blur(8px); box-shadow: 0 6px 18px rgba(120,80,50,0.07); transition: box-shadow .2s; }
 .media-tile:hover { box-shadow: 0 10px 24px rgba(120,80,50,0.14); }
-/* The lifted tile floats above the grid and follows the pointer. */
-.media-tile.lifted { position: fixed; z-index: 60; margin: 0; pointer-events: none; cursor: grabbing; opacity: .97; transform: scale(1.04); box-shadow: 0 18px 40px rgba(120,80,50,0.28); transition: transform .12s ease, box-shadow .12s ease; }
-/* The dashed slot showing where the lifted tile will drop. */
-.media-placeholder { border: 2px dashed var(--accent); background: rgba(190,140,90,0.08); box-shadow: none; backdrop-filter: none; }
-/* While reordering, suppress hover so only FLIP transforms move tiles. */
-.media-grid.reordering { -webkit-user-select: none; user-select: none; }
-.media-grid.reordering .media-tile { cursor: grabbing; }
-.media-grid.reordering .media-tile:hover { box-shadow: 0 6px 18px rgba(120,80,50,0.07); }
 .media-thumb { position: relative; aspect-ratio: 3/2; background: rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; border-bottom: 1px solid rgba(255,255,255,0.6); overflow: hidden; }
 .media-thumb img, .media-thumb video { width: 100%; height: 100%; object-fit: cover; -webkit-user-drag: none; user-select: none; }
 
@@ -329,10 +318,12 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .media-tile.failed .media-thumb { background: rgba(190,70,60,0.12); }
 .media-tile.failed .media-name { color: #B8463C; }
 .upload-progress { display: inline-block; margin-left: 8px; font-family: var(--body-font, inherit); font-size: 12.5px; font-weight: 600; color: var(--accent, #C2683E); background: rgba(194,104,62,0.12); border-radius: 100px; padding: 3px 10px; vertical-align: middle; }
-.media-badge { position: absolute; left: 8px; top: 8px; width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg, var(--accent), var(--accent-alt)); color: #FFF8F0; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; z-index: 2; box-shadow: 0 2px 6px rgba(60,40,28,0.25); }
+/* Position picker — a number dropdown styled like the old order badge. */
+.media-order { position: absolute; left: 8px; top: 8px; z-index: 3; height: 24px; min-width: 36px; padding: 0 18px 0 8px; border: none; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 700; color: #FFF8F0; box-shadow: 0 2px 6px rgba(60,40,28,0.25); -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 2.5L4 5.5L7 2.5' stroke='%23FFF8F0' stroke-width='1.3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"), linear-gradient(135deg, var(--accent), var(--accent-alt)); background-repeat: no-repeat; background-position: right 6px center, 0 0; background-size: 8px, auto; }
+.media-order:focus { outline: 2px solid var(--accent-alt); outline-offset: 1px; }
+.media-order option { color: var(--ink); }
 .media-remove { position: absolute; right: 8px; top: 8px; width: 22px; height: 22px; border-radius: 7px; border: none; background: rgba(190,70,60,0.85); color: #fff; font-size: 13px; line-height: 1; z-index: 3; transition: transform .15s, background .15s; }
 .media-remove:hover { background: rgba(190,70,60,1); transform: scale(1.1); }
-.media-grip { position: absolute; left: 8px; bottom: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1; color: rgba(255,255,255,0.9); background: rgba(0,0,0,0.3); border-radius: 6px; padding: 3px 6px; backdrop-filter: blur(4px); z-index: 2; pointer-events: none; }
 .media-kind { font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: rgba(58,50,42,0.5); }
 .media-name { padding: 9px 11px; font-size: 13px; color: rgba(58,50,42,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .add-media-tile { aspect-ratio: 3/2; border: 1px dashed rgba(150,110,80,0.4); border-radius: 13px; background: transparent; color: rgba(58,50,42,0.4); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; transition: border-color .2s, color .2s; }

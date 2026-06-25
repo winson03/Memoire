@@ -146,13 +146,13 @@
                 <div class="t">Photos &amp; films <span id="uploadProgress" class="upload-progress" hidden></span></div>
                 <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="addMediaBtn">+ Add media</button>
               </div>
-              <div class="media-hint">Drag the tiles to reorder. Photos, films and PDFs are stored securely.</div>
+              <div class="media-hint">Pick a number on each tile to set its order. Photos, films and PDFs are stored securely.</div>
               <input type="file" id="mediaInput" multiple accept="image/*,video/*,application/pdf" hidden>
               <div class="media-grid" id="mediaGrid" data-book="<%= book.id %>">
                 <% photos.forEach(function(m, i){ %>
                   <div class="media-tile" data-media-id="<%= m.id %>">
                     <div class="media-thumb">
-                      <span class="media-badge"><%= i + 1 %></span>
+                      <select class="media-order" aria-label="Position"><option><%= i + 1 %></option></select>
                       <button type="button" class="media-remove" data-remove="<%= m.id %>" title="Remove">×</button>
                       <% if (m.telegram_file_id && m.kind === 'photo') { %>
                         <img src="/media/<%= m.id %>" alt="" draggable="false">
@@ -161,7 +161,6 @@
                       <% } else { %>
                         <span class="media-kind"><%= (m.kind || 'file').toUpperCase() %></span>
                       <% } %>
-                      <span class="media-grip" title="Hold &amp; drag to reorder">⠿</span>
                     </div>
                     <div class="media-name"><%= m.label || m.file_name || 'Untitled' %></div>
                   </div>
