@@ -360,6 +360,49 @@ router.get('/admin/users', ensureAdmin, (req, res) => {
   res.render('admin-users', { users, page, totalPages, total, query: q });
 });
 
+// Admin: new-user form.
+router.get('/admin/users/new', ensureAdmin, (req, res) => {
+  res.render('admin-user-new', { form: {} });
+});
+
+// Admin: create a user (local account with email + password).
+router.post('/admin/users', ensureAdmin, (req, res) => {
+  const name = (req.body.name || '').trim();
+  const username = (req.body.username || '').trim();
+  const email = (req.body.email || '').trim().toLowerCase();
+  const password = req.body.password || '';
+  const phone = (req.body.phone || '').trim() || null;
+  const dob = (req.body.dob || '').trim() || null;
+  const bio = (req.body.bio || '').trim() || null;
+  const role = req.body.role === 'admin' ? 'admin' : 'storyteller';
+
+  const fail = (msg) => {
+    req.flash('error', msg);
+    return res.render('admin-user-new', { form: { name, username, email, phone, dob, bio, role } });
+  };
+
+  if (!name) return fail('Please enter a name.');
+  if (username && !/^[A-Za-z0-9_.-]{3,32}$/.test(username)) return fail('Username must be 3–32 characters (letters, numbers, . _ -).');
+  if (username && Users.findByUsername(username)) return fail('That username is already taken.');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('Please enter a valid email address.');
+  if (Users.findByEmail(email)) return fail('That email is already registered.');
+  if (password.length < 6) return fail('Password must be at least 6 characters.');
+
+  const user = Users.create({
+    name,
+    username: username || null,
+    handle: username || null,
+    email,
+    password_hash: bcrypt.hashSync(password, 10),
+    initials: initialsFromName(name),
+    bio,
+    role,
+  });
+  if (phone || dob) Users.updateProfile(user.id, { phone, dob });
+  req.flash('info', `Created ${name}.`);
+  res.redirect('/admin/users');
+});
+
 // Admin: edit a user's full profile.
 router.get('/admin/users/:id/edit', ensureAdmin, (req, res) => {
   const u = Users.findById(parseInt(req.params.id, 10));
