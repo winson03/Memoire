@@ -184,6 +184,13 @@ router.post('/stories/:id/media', upload.single('file'), async (req, res) => {
   try {
     const baseLabel = (req.body.label || req.file.originalname.replace(/\.[^.]+$/, '')).slice(0, 120);
 
+    // Folder upload: name the story after the folder, but only while it still
+    // has its auto-generated default title (never clobber a real title).
+    const setTitle = (req.body.set_title || '').trim().slice(0, 120);
+    if (setTitle && /^untitled (story|novel)$/i.test((book.title || '').trim())) {
+      Books.setTitle(book.id, setTitle);
+    }
+
     // Store one already-uploaded buffer as a Media row and return its summary.
     const addMedia = (rec, label) => {
       const media = Media.create({

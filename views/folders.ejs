@@ -1,12 +1,13 @@
-<%- include('partials/head', { title: 'Folders & Collections' }) %>
+<%- include('partials/head', { title: 'Folders' }) %>
 <div class="shell">
   <%- include('partials/sidebar') %>
   <main class="main">
-    <%- include('partials/topbar', { pageTitle: 'Folders & Collections', searchAction: '/folders' }) %>
+    <%- include('partials/topbar', { pageTitle: 'Folders', searchAction: '/folders' }) %>
     <div class="content">
       <div class="page">
 
-        <!-- ── COLLECTIONS (group folders) ─────────────────────────────── -->
+        <!-- ── COLLECTIONS (group folders) — FEATURE DISABLED ──────────── -->
+        <% if (false) { /* collections feature disabled */ %>
         <div class="flex-between" style="margin-bottom:22px;">
           <h2 class="h2">Your collections</h2>
           <button class="btn btn-soft"
@@ -50,6 +51,7 @@
             <div class="eh">Create a collection to group several folders together.</div>
           </div>
         <% } %>
+        <% } /* end collections feature disabled */ %>
 
         <!-- ── FOLDERS (group stories) ──────────────────────────────────── -->
         <div class="flex-between" style="margin:42px 0 18px;">
@@ -97,7 +99,8 @@
                     <div class="folder-thumb <%= coverIsImage(b) ? 'has-image' : '' %>" style="background: <%= coverBackground(b) %>;"></div>
                   <% }) %>
                 </div>
-                <!-- Move this folder into a collection -->
+                <!-- Move this folder into a collection — FEATURE DISABLED -->
+                <% if (false) { /* collections feature disabled */ %>
                 <form action="/folders/<%= f.id %>/collection" method="post" style="margin:0;">
                   <select name="collection_id" class="folder-collection" data-autosubmit>
                     <option value="">— No collection —</option>
@@ -106,6 +109,7 @@
                     <% }) %>
                   </select>
                 </form>
+                <% } %>
               </div>
             <% }) %>
           </div>

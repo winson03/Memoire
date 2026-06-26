@@ -586,29 +586,146 @@ function initMedia() {
     progress.textContent = `Uploading ${done}/${total}…`;
   }
 
+  // Upload a list of files in order. When folderName is set, an untitled story
+  // is renamed after it (mirrored on the server via set_title).
+  async function uploadList(files, folderName) {
+    if (!files.length) return;
+    if (folderName) applyFolderTitle(folderName);
+    const total = files.length;
+    let done = 0;
+    showProgress(done, total);
+    for (const file of files) {
+      showProgress(done + 1, total);
+      await uploadFile(file, folderName ? { setTitle: folderName } : {});
+      done += 1;
+    }
+    showProgress(0, 0);
+    refreshOrders();
+  }
+
+  // Natural file-name sort: 1,2,…,10 (not 1,10,2); non-numeric names fall to A–Z.
+  function sortByName(files) {
+    return files.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  }
+
   if (input) {
     input.addEventListener('change', async () => {
-      const files = Array.from(input.files || []);
-      const total = files.length;
-      let done = 0;
-      showProgress(done, total);
-      for (const file of files) {
-        showProgress(done + 1, total);
-        await uploadFile(file);
-        done += 1;
-      }
-      showProgress(0, 0);
+      await uploadList(Array.from(input.files || []), '');
       input.value = '';
-      refreshOrders();
     });
   }
 
-  async function uploadFile(file) {
+  // Folder upload via the picker — pulls out images, sorts by name, titles an
+  // untitled story after the folder. NOTE: the browser shows its own (un-
+  // styleable) "Upload N files to this site?" prompt for folder picking; drag a
+  // folder onto the panel instead to skip it.
+  const folderBtn = document.getElementById('addFolderBtn');
+  const folderInput = document.getElementById('folderInput');
+  if (folderBtn && folderInput) folderBtn.addEventListener('click', () => folderInput.click());
+  if (folderInput) {
+    folderInput.addEventListener('change', async () => {
+      const all = Array.from(folderInput.files || []);
+      const images = sortByName(all.filter((f) => (f.type || '').startsWith('image/')));
+      await uploadList(images, folderNameOf(all[0]));
+      folderInput.value = '';
+    });
+  }
+
+  // Top folder segment of a webkitdirectory file path ("Folder/img.png" → "Folder").
+  function folderNameOf(file) {
+    const rel = (file && file.webkitRelativePath) || '';
+    const seg = rel.split('/').filter(Boolean);
+    return seg.length > 1 ? seg[0] : '';
+  }
+
+  // Mirror the server: only rename a story that still has its default title.
+  function applyFolderTitle(name) {
+    if (!name) return;
+    const titleInput = document.getElementById('titleInput');
+    if (!titleInput) return;
+    const cur = (titleInput.value || '').trim();
+    if (cur === '' || /^untitled (story|novel)$/i.test(cur)) {
+      titleInput.value = name;
+      const coverTitle = document.getElementById('coverTitle');
+      if (coverTitle) coverTitle.textContent = name;
+    }
+  }
+
+  // Drag-and-drop folder upload. Dropping a folder reads its files directly via
+  // the entries API, which (unlike folder picking) shows no browser prompt.
+  function readEntryFiles(entry) {
+    return new Promise((resolve) => {
+      if (entry.isFile) {
+        entry.file((f) => resolve([f]), () => resolve([]));
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const acc = [];
+        const readBatch = () => reader.readEntries(async (batch) => {
+          if (!batch.length) {
+            const nested = await Promise.all(acc.map(readEntryFiles));
+            resolve(nested.flat());
+          } else {
+            acc.push(...batch);
+            readBatch(); // readEntries yields ~100 at a time; keep going
+          }
+        }, () => resolve([]));
+        readBatch();
+      } else {
+        resolve([]);
+      }
+    });
+  }
+
+  const dropzone = grid.closest('.panel') || grid;
+  let dragDepth = 0;
+  const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+
+  dropzone.addEventListener('dragenter', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth += 1;
+    dropzone.classList.add('drop-active');
+  });
+  dropzone.addEventListener('dragover', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  dropzone.addEventListener('dragleave', () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) dropzone.classList.remove('drop-active');
+  });
+  dropzone.addEventListener('drop', async (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    dropzone.classList.remove('drop-active');
+
+    const items = Array.from(e.dataTransfer.items || []);
+    const entries = items.map((it) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null)).filter(Boolean);
+
+    // A single dropped folder names the story after itself.
+    let folderName = '';
+    if (entries.length === 1 && entries[0].isDirectory) folderName = entries[0].name;
+
+    let files;
+    if (entries.length) {
+      const collected = (await Promise.all(entries.map(readEntryFiles))).flat();
+      files = sortByName(collected.filter((f) => (f.type || '').startsWith('image/')));
+    } else {
+      // Browsers without the entries API: fall back to the flat file list.
+      files = sortByName(Array.from(e.dataTransfer.files || []).filter((f) => (f.type || '').startsWith('image/')));
+    }
+    await uploadList(files, folderName);
+  });
+
+  async function uploadFile(file, opts = {}) {
     const tile = makeUploadingTile(file);
     grid.insertBefore(tile, addTile);
     const fd = new FormData();
     fd.append('file', file);
     fd.append('label', file.name.replace(/\.[^.]+$/, ''));
+    if (opts.setTitle) fd.append('set_title', opts.setTitle);
     try {
       const res = await fetch(`/stories/${bookId}/media`, { method: 'POST', body: fd });
       if (!res.ok) {

@@ -115,13 +115,12 @@ router.get('/discover', (req, res) => {
   res.render('discover', { books, page, totalPages, total, query: q });
 });
 
-// ── Folders & Collections ─────────────────────────────────────────────────────
-// Hierarchy: Collection → Folders → Stories.
+// ── Folders ───────────────────────────────────────────────────────────────────
+// Hierarchy: Folders → Stories. (Collections feature disabled.)
 router.get('/folders', (req, res) => {
   const u = req.user;
   const q = req.query.q || '';
   const rawFolders = Folders.listForUser(u.id);
-  const rawCollections = Collections.listForUser(u.id);
 
   // Build folder view-models (story count + cover thumbnails).
   const folderVM = (f) => {
@@ -129,19 +128,18 @@ router.get('/folders', (req, res) => {
     return { ...f, count: fb.length, covers: fb.slice(0, 3) };
   };
 
-  // Collections with a count of folders inside + a few folder thumbnails.
-  const collections = rawCollections.map((c) => {
-    const inside = rawFolders.filter((f) => f.collection_id === c.id);
-    return { ...c, folderCount: inside.length, folderThemes: inside.slice(0, 3).map((f) => f.theme) };
-  });
+  // Collections disabled — pass empty/null so the view's leftover guards are inert.
+  const collections = [];
+  const selectedCollection = null;
+  // const rawCollections = Collections.listForUser(u.id);
+  // const collections = rawCollections.map((c) => {
+  //   const inside = rawFolders.filter((f) => f.collection_id === c.id);
+  //   return { ...c, folderCount: inside.length, folderThemes: inside.slice(0, 3).map((f) => f.theme) };
+  // });
+  // const selId = parseInt(req.query.collection, 10);
+  // const selectedCollection = selId ? rawCollections.find((c) => c.id === selId) || null : null;
 
-  // A collection can be selected to filter the folders list.
-  const selId = parseInt(req.query.collection, 10);
-  const selectedCollection = selId ? rawCollections.find((c) => c.id === selId) || null : null;
-
-  let folderSource = rawFolders;
-  if (selectedCollection) folderSource = rawFolders.filter((f) => f.collection_id === selectedCollection.id);
-  const folders = folderSource.map(folderVM);
+  const folders = rawFolders.map(folderVM);
 
   // Open folder detail → its stories as one flat grid.
   let openFolder = null;

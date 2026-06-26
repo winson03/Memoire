@@ -144,10 +144,14 @@
             <div class="glass panel">
               <div class="media-head">
                 <div class="t">Photos &amp; films <span id="uploadProgress" class="upload-progress" hidden></span></div>
-                <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="addMediaBtn">+ Add media</button>
+                <div style="display:flex;gap:8px;">
+                  <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="addFolderBtn">+ Add folder</button>
+                  <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="addMediaBtn">+ Add media</button>
+                </div>
               </div>
-              <div class="media-hint">Pick a number on each tile to set its order. Photos, films and PDFs are stored securely.</div>
+              <div class="media-hint">Drag a folder of images here to upload them all (no browser prompt) — they’re sorted by file name and the folder names an untitled story. Pick a number on each tile to set its order. Photos, films and PDFs are stored securely.</div>
               <input type="file" id="mediaInput" multiple accept="image/*,video/*,application/pdf" hidden>
+              <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
               <div class="media-grid" id="mediaGrid" data-book="<%= book.id %>">
                 <% photos.forEach(function(m, i){ %>
                   <div class="media-tile" data-media-id="<%= m.id %>">

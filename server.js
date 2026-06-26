@@ -5,8 +5,10 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
+const SqliteStore = require('better-sqlite3-session-store')(session);
 const flash = require('connect-flash');
 
+const db = require('./lib/db');
 const { passport } = require('./lib/passport');
 const { seedAdmin } = require('./lib/seed-admin');
 const storage = require('./lib/storage');
@@ -26,12 +28,18 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Sessions.
+// Sessions. Login lasts SESSION_MAX_AGE_DAYS from sign-in (default 365 = one
+// year). Sessions are persisted in SQLite, so they survive server restarts.
+const SESSION_DAYS = Number(process.env.SESSION_MAX_AGE_DAYS) || 365;
 app.use(session({
+  store: new SqliteStore({
+    client: db,
+    expired: { clear: true, intervalMs: 1000 * 60 * 60 * 12 }, // sweep expired rows twice a day
+  }),
   secret: process.env.SESSION_SECRET || 'memoire-dev-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * 30 },
+  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * SESSION_DAYS },
 }));
 
 // Auth + flash.
@@ -76,7 +84,8 @@ app.use('/auth', require('./routes/auth'));
 app.use('/', require('./routes/public'));
 app.use('/', require('./routes/app'));
 app.use('/folders', require('./routes/folders'));
-app.use('/collections', require('./routes/collections'));
+// Collections feature disabled — router unmounted (see routes/collections.js).
+// app.use('/collections', require('./routes/collections'));
 app.use('/', require('./routes/stories'));
 
 // ── 404 ────────────────────────────────────────────────────────────────────────
