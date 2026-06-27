@@ -1,0 +1,41 @@
+<%- include('partials/head', { title: 'Gallery' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Gallery', searchAction: '/gallery' }) %>
+    <div class="content">
+      <div class="page">
+
+        <div class="gallery-bar">
+          <div class="sort-toggle">
+            <a href="/gallery?order=newest" class="<%= order === 'newest' ? 'active' : '' %>">Newest first</a>
+            <a href="/gallery?order=oldest" class="<%= order === 'oldest' ? 'active' : '' %>">Oldest first</a>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span id="galleryProgress" class="upload-progress" hidden></span>
+            <button type="button" class="btn btn-accent" id="galleryUploadBtn">+ Add images</button>
+          </div>
+        </div>
+
+        <input type="file" id="galleryInput" accept="image/*" multiple hidden>
+
+        <div class="gallery-grid" id="galleryGrid" data-order="<%= order %>">
+          <% images.forEach(function(img){ %>
+            <div class="gallery-tile" data-id="<%= img.id %>">
+              <button type="button" class="media-remove" data-del="<%= img.id %>" title="Remove">×</button>
+              <img src="/gallery/<%= img.id %>/raw" alt="" loading="lazy">
+            </div>
+          <% }) %>
+        </div>
+
+        <div class="empty" id="galleryEmpty" <%= images.length ? 'hidden' : '' %>>
+          <div class="ico">▦</div>
+          <div class="et">No images yet</div>
+          <div class="eh">Add images with + Add images — they’ll be sorted by date.</div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

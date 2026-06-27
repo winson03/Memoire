@@ -84,6 +84,7 @@ app.use('/auth', require('./routes/auth'));
 app.use('/', require('./routes/public'));
 app.use('/', require('./routes/app'));
 app.use('/folders', require('./routes/folders'));
+app.use('/gallery', require('./routes/gallery'));
 // Collections feature disabled — router unmounted (see routes/collections.js).
 // app.use('/collections', require('./routes/collections'));
 app.use('/', require('./routes/stories'));

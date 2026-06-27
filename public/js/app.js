@@ -393,6 +393,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Media management (editor).
   initMedia();
 
+  // Standalone image gallery.
+  initGallery();
+
   // Live search — debounced auto-submit, with focus/caret restored after reload.
   const searchForm = document.getElementById('searchForm');
   const searchInput = document.getElementById('searchInput');
@@ -892,4 +895,73 @@ function initMedia() {
 
   orderableTiles().forEach(bindTile);
   refreshOrders();
+}
+
+// ── Standalone image gallery (upload, delete, lightbox) ─────────────────────
+function initGallery() {
+  const grid = document.getElementById('galleryGrid');
+  if (!grid) return;
+  const input = document.getElementById('galleryInput');
+  const btn = document.getElementById('galleryUploadBtn');
+  const empty = document.getElementById('galleryEmpty');
+  const progress = document.getElementById('galleryProgress');
+  const newestFirst = grid.dataset.order !== 'oldest';
+
+  if (btn && input) btn.addEventListener('click', () => input.click());
+
+  function showProgress(done, total) {
+    if (!progress) return;
+    if (total <= 0) { progress.hidden = true; progress.textContent = ''; return; }
+    progress.hidden = false;
+    progress.textContent = `Uploading ${done}/${total}…`;
+  }
+
+  function addTile(img) {
+    const el = document.createElement('div');
+    el.className = 'gallery-tile';
+    el.dataset.id = img.id;
+    el.innerHTML =
+      `<button type="button" class="media-remove" data-del="${img.id}" title="Remove">×</button>` +
+      `<img src="${img.url}" alt="" loading="lazy">`;
+    // Newest-first view shows fresh uploads at the top; oldest-first at the bottom.
+    grid.insertAdjacentElement(newestFirst ? 'afterbegin' : 'beforeend', el);
+    if (empty) empty.hidden = true;
+  }
+
+  if (input) {
+    input.addEventListener('change', async () => {
+      const files = Array.from(input.files || []).filter((f) => (f.type || '').startsWith('image/'));
+      let done = 0;
+      showProgress(done, files.length);
+      for (const file of files) {
+        showProgress(done + 1, files.length);
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+          const res = await fetch('/gallery', { method: 'POST', body: fd });
+          if (res.ok) addTile(await res.json());
+        } catch (_) { /* skip failed file */ }
+        done += 1;
+      }
+      showProgress(0, 0);
+      input.value = '';
+    });
+  }
+
+  grid.addEventListener('click', async (e) => {
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      e.stopPropagation();
+      const tile = del.closest('.gallery-tile');
+      await fetch('/gallery/' + del.dataset.del + '/delete', { method: 'POST' });
+      tile.remove();
+      if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
+      return;
+    }
+    const clicked = e.target.closest('.gallery-tile img');
+    if (clicked) {
+      const imgs = [...grid.querySelectorAll('.gallery-tile img')];
+      openLightbox(imgs.map((x) => ({ src: x.src, caption: '' })), imgs.indexOf(clicked));
+    }
+  });
 }
