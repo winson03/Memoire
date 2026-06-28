@@ -73,16 +73,7 @@ router.get('/stories/:id/download', async (req, res) => {
   });
   archive.pipe(res);
 
-  // A plain-text file with the story's words (title, author, blurb, paragraphs).
-  const blocks = parseBlocks(book.content);
-  const lines = [book.title || 'Untitled'];
-  if (book.author) lines.push('by ' + book.author);
-  lines.push('');
-  if (book.blurb) lines.push(book.blurb, '');
-  blocks.forEach((b) => { if (b.type === 'text') lines.push(b.value, ''); });
-  archive.append(lines.join('\n'), { name: `${safe}.txt` });
-
-  // Images, zero-padded prefix keeps them in gallery order inside the folder.
+  // Images only — zero-padded prefix keeps them in gallery order inside the folder.
   for (let i = 0; i < photos.length; i++) {
     const m = photos[i];
     try {
