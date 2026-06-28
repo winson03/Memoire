@@ -922,6 +922,7 @@ function initGallery() {
     el.dataset.id = img.id;
     el.innerHTML =
       `<button type="button" class="media-remove" data-del="${img.id}" title="Remove">×</button>` +
+      `<a class="media-download" href="${img.url}?download=1" download title="Download">↓</a>` +
       `<img src="${img.url}" alt="" loading="lazy">`;
     // Newest-first view shows fresh uploads at the top; oldest-first at the bottom.
     grid.insertAdjacentElement(newestFirst ? 'afterbegin' : 'beforeend', el);

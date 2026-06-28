@@ -23,6 +23,7 @@
           <% images.forEach(function(img){ %>
             <div class="gallery-tile" data-id="<%= img.id %>">
               <button type="button" class="media-remove" data-del="<%= img.id %>" title="Remove">×</button>
+              <a class="media-download" href="/gallery/<%= img.id %>/raw?download=1" download title="Download">↓</a>
               <img src="/gallery/<%= img.id %>/raw" alt="" loading="lazy">
             </div>
           <% }) %>

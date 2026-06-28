@@ -27,6 +27,7 @@
                   <input type="hidden" name="redirect" value="/reader/<%= openBook.id %>">
                   <button type="submit" class="btn btn-soft"><%= faved ? '♥ In favourites' : '♡ Add to favourites' %></button>
                 </form>
+                <a href="/stories/<%= openBook.id %>/download" class="btn btn-soft">⤓ Download</a>
                 <% if (isOwner) { %>
                   <a href="/editor?id=<%= openBook.id %>" class="btn btn-accent">Edit story</a>
                   <button type="button" class="btn-danger-soft" style="width:auto;padding:11px 18px;"

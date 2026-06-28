@@ -10,6 +10,7 @@ const { Books, Folders, Media, Favourites, Notifications } = require('../lib/que
 const { THEME_KEYS } = require('../lib/themes');
 const storage = require('../lib/storage');
 const pdf = require('../lib/pdf');
+const archiver = require('archiver');
 
 // Media uploads stream straight to a temp file (no in-memory buffering and no
 // size limit) so very large videos are bounded only by free disk space.
@@ -49,6 +50,51 @@ router.get('/reader/:id', (req, res) => {
   const faved = Favourites.idsForUser(req.user.id).includes(book.id);
 
   res.render('reader', { openBook: book, photos, moreByAuthor, faved, isOwner: ownerOnly(book, req), blocks: parseBlocks(book.content) });
+});
+
+// ── Download a story as a zip (folder): its images in order + a text file ──────
+router.get('/stories/:id/download', async (req, res) => {
+  const book = Books.findById(parseInt(req.params.id, 10));
+  if (!book) return res.redirect('/dashboard');
+  // Same access rule as the reader: published, or your own.
+  if (book.status !== 'published' && !ownerOnly(book, req)) return res.redirect('/dashboard');
+
+  const photos = Media.listForBook(book.id).filter((m) => m.telegram_file_id);
+  const safe = (book.title || 'story').replace(/[^\w\- ]+/g, '').trim().slice(0, 80) || 'story';
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safe)}.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', (err) => {
+    console.error('[story download]', err.message);
+    if (!res.headersSent) res.status(500);
+    res.end();
+  });
+  archive.pipe(res);
+
+  // A plain-text file with the story's words (title, author, blurb, paragraphs).
+  const blocks = parseBlocks(book.content);
+  const lines = [book.title || 'Untitled'];
+  if (book.author) lines.push('by ' + book.author);
+  lines.push('');
+  if (book.blurb) lines.push(book.blurb, '');
+  blocks.forEach((b) => { if (b.type === 'text') lines.push(b.value, ''); });
+  archive.append(lines.join('\n'), { name: `${safe}.txt` });
+
+  // Images, zero-padded prefix keeps them in gallery order inside the folder.
+  for (let i = 0; i < photos.length; i++) {
+    const m = photos[i];
+    try {
+      const buf = await storage.fetchBuffer(m.telegram_file_id);
+      const base = m.file_name || `image-${i + 1}.jpg`;
+      archive.append(buf, { name: `${String(i + 1).padStart(3, '0')}-${base}` });
+    } catch (e) {
+      console.error('[story download] image', m.id, e.message);
+    }
+  }
+
+  archive.finalize();
 });
 
 // ── Compose: block-based story body (text + images interleaved) ───────────────
