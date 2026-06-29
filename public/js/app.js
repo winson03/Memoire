@@ -897,6 +897,57 @@ function initMedia() {
   refreshOrders();
 }
 
+// ── iPhone-Photos-style pinch zoom: cycles columns 4 → 8 → 12 → 16 ──────────
+function initGalleryZoom(grid) {
+  const COLS = [4, 8, 12, 16];          // index 0 = most zoomed in (largest)
+  let idx = COLS.indexOf(parseInt(localStorage.getItem('galleryCols'), 10));
+  if (idx === -1) idx = 1;              // default: 8 per row
+
+  const ctrl = document.getElementById('galleryZoom');
+  const btnIn = ctrl && ctrl.querySelector('[data-zoom="in"]');
+  const btnOut = ctrl && ctrl.querySelector('[data-zoom="out"]');
+
+  function apply() {
+    grid.style.setProperty('--gallery-cols', COLS[idx]);
+    localStorage.setItem('galleryCols', COLS[idx]);
+    if (btnIn) btnIn.disabled = idx === 0;
+    if (btnOut) btnOut.disabled = idx === COLS.length - 1;
+  }
+  function zoomIn() { if (idx > 0) { idx--; apply(); } }                 // fewer, larger
+  function zoomOut() { if (idx < COLS.length - 1) { idx++; apply(); } }  // more, smaller
+  apply();
+
+  if (ctrl) ctrl.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-zoom]');
+    if (b) (b.dataset.zoom === 'in' ? zoomIn : zoomOut)();
+  });
+
+  // Trackpad pinch / Ctrl+scroll (browsers report trackpad pinch as wheel+ctrlKey)
+  let wheelAcc = 0;
+  grid.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    wheelAcc += e.deltaY;
+    if (wheelAcc <= -30) { zoomIn(); wheelAcc = 0; }
+    else if (wheelAcc >= 30) { zoomOut(); wheelAcc = 0; }
+  }, { passive: false });
+
+  // Two-finger touch pinch
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  let startDist = 0;
+  grid.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) startDist = dist(e.touches);
+  }, { passive: true });
+  grid.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 2 || !startDist) return;
+    e.preventDefault();                 // stop native page zoom while pinching the grid
+    const ratio = dist(e.touches) / startDist;
+    if (ratio > 1.35) { zoomIn(); startDist = dist(e.touches); }
+    else if (ratio < 0.74) { zoomOut(); startDist = dist(e.touches); }
+  }, { passive: false });
+  grid.addEventListener('touchend', (e) => { if (e.touches.length < 2) startDist = 0; });
+}
+
 // ── Standalone image gallery (upload, delete, lightbox) ─────────────────────
 function initGallery() {
   const grid = document.getElementById('galleryGrid');
@@ -906,6 +957,8 @@ function initGallery() {
   const empty = document.getElementById('galleryEmpty');
   const progress = document.getElementById('galleryProgress');
   const newestFirst = grid.dataset.order !== 'oldest';
+
+  initGalleryZoom(grid);
 
   if (btn && input) btn.addEventListener('click', () => input.click());
 
