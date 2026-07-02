@@ -83,20 +83,22 @@ function openLightbox(items, index) {
   bd.innerHTML = `
     <button class="lightbox-close" aria-label="Close">×</button>
     <button class="lightbox-nav prev" aria-label="Previous image" ${multi ? '' : 'hidden'}>‹</button>
-    <img alt="">
+    <div class="lightbox-media"></div>
     <button class="lightbox-nav next" aria-label="Next image" ${multi ? '' : 'hidden'}>›</button>
     <div class="lightbox-cap"></div>
     <div class="lightbox-count" ${multi ? '' : 'hidden'}></div>`;
   document.body.appendChild(bd);
   document.body.style.overflow = 'hidden';
 
-  const imgEl = bd.querySelector('img');
+  const mediaEl = bd.querySelector('.lightbox-media');
   const capEl = bd.querySelector('.lightbox-cap');
   const countEl = bd.querySelector('.lightbox-count');
 
   function render() {
     const it = items[i];
-    imgEl.src = it.src;
+    mediaEl.innerHTML = it.kind === 'video'
+      ? `<video src="${it.src}" controls autoplay></video>`
+      : `<img src="${it.src}" alt="">`;
     capEl.textContent = it.caption || '';
     capEl.style.display = it.caption ? '' : 'none';
     if (multi) countEl.textContent = `${i + 1} / ${items.length}`;
@@ -973,10 +975,13 @@ function initGallery() {
     const el = document.createElement('div');
     el.className = 'gallery-tile';
     el.dataset.id = img.id;
+    const isVideo = (img.mime || '').startsWith('video/');
     el.innerHTML =
       `<button type="button" class="media-remove" data-del="${img.id}" title="Remove">×</button>` +
       `<a class="media-download" href="${img.url}?download=1" download title="Download">↓</a>` +
-      `<img src="${img.url}" alt="" loading="lazy">`;
+      (isVideo
+        ? `<video src="${img.url}" muted preload="metadata"></video><div class="media-play">▶</div>`
+        : `<img src="${img.url}" alt="" loading="lazy">`);
     // Newest-first view shows fresh uploads at the top; oldest-first at the bottom.
     grid.insertAdjacentElement(newestFirst ? 'afterbegin' : 'beforeend', el);
     if (empty) empty.hidden = true;
@@ -984,7 +989,7 @@ function initGallery() {
 
   if (input) {
     input.addEventListener('change', async () => {
-      const files = Array.from(input.files || []).filter((f) => (f.type || '').startsWith('image/'));
+      const files = Array.from(input.files || []).filter((f) => /^(image|video)\//.test(f.type || ''));
       let done = 0;
       showProgress(done, files.length);
       for (const file of files) {
@@ -1012,10 +1017,10 @@ function initGallery() {
       if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
       return;
     }
-    const clicked = e.target.closest('.gallery-tile img');
+    const clicked = e.target.closest('.gallery-tile img, .gallery-tile video');
     if (clicked) {
-      const imgs = [...grid.querySelectorAll('.gallery-tile img')];
-      openLightbox(imgs.map((x) => ({ src: x.src, caption: '' })), imgs.indexOf(clicked));
+      const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
+      openLightbox(items.map((x) => ({ src: x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })), items.indexOf(clicked));
     }
   });
 }

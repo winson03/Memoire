@@ -29,12 +29,13 @@ router.get('/', (req, res) => {
   res.render('gallery', { images, order });
 });
 
-// Upload one image (called once per file by the client, for progress).
+// Upload one image or video (called once per file by the client, for progress).
 router.post('/', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'no file' });
-  if (!(req.file.mimetype || '').startsWith('image/')) {
+  const mime = req.file.mimetype || '';
+  if (!mime.startsWith('image/') && !mime.startsWith('video/')) {
     fs.promises.unlink(req.file.path).catch(() => {});
-    return res.status(400).json({ error: 'Images only.' });
+    return res.status(400).json({ error: 'Images and videos only.' });
   }
   try {
     const rec = await storage.saveFile(req.file.path, req.file.originalname, req.file.mimetype);
@@ -47,7 +48,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       file_name: rec.file_name,
       file_size: rec.file_size,
     });
-    res.json({ id: img.id, url: '/gallery/' + img.id + '/raw' });
+    res.json({ id: img.id, url: '/gallery/' + img.id + '/raw', mime: img.mime });
   } catch (err) {
     console.error('[gallery upload]', err.message);
     res.status(500).json({ error: 'Upload failed: ' + err.message });
