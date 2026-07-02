@@ -63,8 +63,36 @@ function postForm(action, fields) {
     form.appendChild(i);
   });
   document.body.appendChild(form);
+  showPageLoader();
   form.submit();
 }
+
+// ── Full-page loading overlay (initial load + between-page navigation) ──────
+function showPageLoader() {
+  const el = document.getElementById('pageLoader');
+  if (el) el.classList.remove('hidden');
+}
+function hidePageLoader() {
+  const el = document.getElementById('pageLoader');
+  if (el) el.classList.add('hidden');
+}
+window.addEventListener('load', hidePageLoader);
+setTimeout(hidePageLoader, 4000); // safety net if 'load' never fires
+window.addEventListener('pageshow', (e) => { if (e.persisted) hidePageLoader(); }); // restored from bfcache
+
+// Any normal same-origin link click or form submit navigates away from this
+// page, so bring the loader back for the (server-rendered) page in transit.
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target.closest('a[href]');
+  if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+  const url = new URL(a.href, window.location.href);
+  if (url.origin !== window.location.origin) return;
+  const samePage = url.pathname === window.location.pathname && url.search === window.location.search;
+  if (samePage && url.hash) return; // in-page anchor jump, not a navigation
+  showPageLoader();
+});
+document.addEventListener('submit', (e) => { if (!e.defaultPrevented) showPageLoader(); });
 
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function escapeAttr(s) { return escapeHtml(s); }
@@ -213,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
         onConfirm: () => {
           if (btn.dataset.action) { postForm(btn.dataset.action, {}); return; }
           const form = btn.closest('form');
-          if (form) form.submit();
+          if (form) { showPageLoader(); form.submit(); }
         },
       });
     });
@@ -411,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let timer;
     searchInput.addEventListener('input', () => {
       clearTimeout(timer);
-      timer = setTimeout(() => searchForm.submit(), 350);
+      timer = setTimeout(() => { showPageLoader(); searchForm.submit(); }, 350);
     });
   }
 
@@ -461,7 +489,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Auto-submit selects (e.g. moving a folder into a collection).
   document.querySelectorAll('select[data-autosubmit]').forEach((sel) => {
-    sel.addEventListener('change', () => { if (sel.form) sel.form.submit(); });
+    sel.addEventListener('change', () => { if (sel.form) { showPageLoader(); sel.form.submit(); } });
   });
 
   // Reader: click a story photo to view it full-size, then slide between all
