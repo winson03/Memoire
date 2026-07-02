@@ -115,6 +115,19 @@ app.listen(PORT, () => {
   console.log(`\n  Mémoire is running → http://localhost:${PORT}`);
   console.log(`  Media storage:    ${storage.backend === 'telegram' ? 'Telegram' : `local disk (${storage.MEDIA_DIR})`}`);
   console.log(`  Google sign-in:   ${require('./lib/passport').hasGoogle ? 'enabled' : 'disabled'}\n`);
+
+  // Daily DB backup to Telegram, at 00:00 Asia/Kuala_Lumpur (backupDatabase()
+  // no-ops if Telegram isn't configured). KL is a fixed UTC+8 with no DST, so
+  // a plain 24h interval stays aligned to midnight once the first run lands there.
+  const { backupDatabase } = require('./lib/backup');
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const KL_OFFSET_MS = 8 * 60 * 60 * 1000;
+  const shiftedNow = Date.now() + KL_OFFSET_MS;
+  const msUntilNextMidnightKL = (Math.floor(shiftedNow / DAY_MS) + 1) * DAY_MS - shiftedNow;
+  setTimeout(function runBackup() {
+    backupDatabase().catch((err) => console.error('[backup] failed:', err.message));
+    setInterval(() => backupDatabase().catch((err) => console.error('[backup] failed:', err.message)), DAY_MS);
+  }, msUntilNextMidnightKL);
 });
 
 module.exports = app;
