@@ -125,7 +125,7 @@ function openLightbox(items, index) {
   function render() {
     const it = items[i];
     mediaEl.innerHTML = it.kind === 'youtube'
-      ? `<iframe class="lightbox-youtube" src="${it.src}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
+      ? `<iframe class="lightbox-youtube" src="${it.src}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="origin"></iframe>`
       : it.kind === 'video'
         ? `<video src="${it.src}" controls autoplay></video>`
         : `<img src="${it.src}" alt="">`;

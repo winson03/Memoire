@@ -74,7 +74,7 @@
                   <% } else if (m.telegram_file_id && m.kind === 'video') { %>
                     <div class="photo-frame"><video src="/media/<%= m.id %>" controls preload="metadata"></video></div>
                   <% } else if (m.telegram_file_id && m.kind === 'youtube') { %>
-                    <div class="photo-frame video-embed"><iframe src="https://www.youtube-nocookie.com/embed/<%= m.telegram_file_id.slice(3) %>" title="<%= m.label || 'video' %>" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>
+                    <div class="photo-frame video-embed"><iframe src="https://www.youtube-nocookie.com/embed/<%= m.telegram_file_id.slice(3) %>" title="<%= m.label || 'video' %>" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy" referrerpolicy="origin"></iframe></div>
                   <% } else if (m.telegram_file_id && m.kind === 'pdf') { %>
                     <div class="photo-frame pdf"><iframe src="/media/<%= m.id %>" title="<%= m.label || 'document' %>"></iframe></div>
                   <% } else if (m.telegram_file_id) { %>
