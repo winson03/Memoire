@@ -64,7 +64,7 @@ router.get('/:id/raw', async (req, res) => {
   const img = Gallery.findById(parseInt(req.params.id, 10));
   if (!img || img.user_id !== req.user.id || !img.telegram_file_id) return res.status(404).send('Not found');
   try {
-    await storage.streamTo(img.telegram_file_id, res, { mime: img.mime, fileName: img.file_name, inline: !req.query.download });
+    await storage.streamTo(img.telegram_file_id, res, { mime: img.mime, fileName: img.file_name, inline: !req.query.download, range: req.headers.range || null });
   } catch (err) {
     console.error('[gallery stream]', err.message);
     if (!res.headersSent) res.status(502).send('Could not load image.');

@@ -360,6 +360,7 @@ router.get('/media/:id', async (req, res) => {
       mime: media.mime,
       fileName: media.file_name,
       inline: req.query.download ? false : true,
+      range: req.headers.range || null,
     });
   } catch (err) {
     console.error('[media stream]', err.message);
