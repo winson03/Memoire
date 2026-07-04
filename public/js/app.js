@@ -426,6 +426,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Standalone image gallery.
   initGallery();
 
+  // Library: bulk folder import (1 folder = 1 private story).
+  initFolderImport();
+
   // Live search — debounced auto-submit, with focus/caret restored after reload.
   const searchForm = document.getElementById('searchForm');
   const searchInput = document.getElementById('searchInput');
@@ -599,22 +602,254 @@ function initCover() {
 }
 
 // ── Batch-upload time estimate ───────────────────────────────────────────────
-// Files upload one at a time, and each request only resolves once the server
-// (and the storage backend behind it) has finished — so the only reliable
-// signal is completed bytes per second. The estimate firms up as files land.
+// Each file makes two hops (browser → server → storage). Live XHR progress
+// tells us how many bytes have left the browser; those count half until the
+// server confirms the file is stored (full credit), since the second hop is
+// still pending. Rate = credited bytes / elapsed. The readout is smoothed so
+// it counts down steadily instead of jumping around.
 function makeUploadEta(files) {
   const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
   const start = Date.now();
   let doneBytes = 0;
+  let smoothed = null;
+  const inflight = new Map(); // file → bytes sent so far
   return {
-    fileDone(file) { doneBytes += (file.size || 0); },
+    progress(file, sentBytes) { inflight.set(file, Math.min(sentBytes, file.size || sentBytes)); },
+    fileDone(file) { inflight.delete(file); doneBytes += (file.size || 0); },
     text() {
       const elapsed = (Date.now() - start) / 1000;
-      if (!doneBytes || !totalBytes || elapsed < 1) return 'estimating time…';
-      const secsLeft = (totalBytes - doneBytes) / (doneBytes / elapsed);
-      return `about ${formatDuration(secsLeft)} left`;
+      let sent = 0;
+      inflight.forEach((b) => { sent += b; });
+      // Sent-but-unconfirmed bytes count 70%: the browser→server hop (what we
+      // can measure) is normally the slow one; the server→storage hop behind
+      // it rides datacenter bandwidth.
+      const credited = doneBytes + sent * 0.7;
+      if (!credited || !totalBytes || elapsed < 1.5) return 'estimating time…';
+      const raw = (totalBytes - credited) / (credited / elapsed);
+      smoothed = smoothed === null ? raw : (smoothed + raw) / 2;
+      return `about ${formatDuration(smoothed)} left`;
     },
   };
+}
+
+// POST a FormData like fetch(), but report upload progress along the way.
+// Resolves to a fetch-Response-alike ({ ok, status, json }).
+function postFormWithProgress(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    if (xhr.upload && onProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) onProgress(e.loaded);
+      });
+    }
+    xhr.addEventListener('load', () => resolve({
+      ok: xhr.status >= 200 && xhr.status < 300,
+      status: xhr.status,
+      json: async () => JSON.parse(xhr.responseText),
+    }));
+    xhr.addEventListener('error', () => reject(new Error('network error')));
+    xhr.addEventListener('abort', () => reject(new Error('upload cancelled')));
+    xhr.send(formData);
+  });
+}
+
+// Recursively gather File objects from a drag-and-drop directory entry.
+// (The entries API reads dropped folders directly, with no browser prompt.)
+function readEntryFiles(entry) {
+  return new Promise((resolve) => {
+    if (entry.isFile) {
+      entry.file((f) => resolve([f]), () => resolve([]));
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const acc = [];
+      const readBatch = () => reader.readEntries(async (batch) => {
+        if (!batch.length) {
+          const nested = await Promise.all(acc.map(readEntryFiles));
+          resolve(nested.flat());
+        } else {
+          acc.push(...batch);
+          readBatch(); // readEntries yields ~100 at a time; keep going
+        }
+      }, () => resolve([]));
+      readBatch();
+    } else {
+      resolve([]);
+    }
+  });
+}
+
+// Recursively gather File objects from a File System Access directory handle
+// (nested folders included, mirroring the drag-and-drop path).
+async function collectDirFiles(dirHandle) {
+  const out = [];
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind === 'file') {
+      try { out.push(await entry.getFile()); } catch (_) { /* unreadable file */ }
+    } else if (entry.kind === 'directory') {
+      out.push(...await collectDirFiles(entry));
+    }
+  }
+  return out;
+}
+
+// ── Library: bulk folder import — 1 folder = 1 private story ────────────────
+function initFolderImport() {
+  const btn = document.getElementById('importFoldersBtn');
+  if (!btn) return;
+  const input = document.getElementById('importFolderInput');
+  const zone = document.getElementById('importDropzone');
+  const progress = document.getElementById('importProgress');
+
+  function show(text) {
+    if (!progress) return;
+    progress.hidden = !text;
+    progress.textContent = text || '';
+  }
+
+  const isMedia = (f) => /^(image|video)\//.test(f.type || '');
+  const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+
+  // groups: [{ name, files }] — each becomes one private story named after the
+  // folder, files in name order, first photo as the cover.
+  async function importGroups(groups) {
+    groups = groups
+      .map((g) => ({ name: g.name, files: g.files.filter(isMedia).sort(byName) }))
+      .filter((g) => g.files.length)
+      .sort(byName);
+    if (!groups.length) { show(''); return; }
+
+    const eta = makeUploadEta(groups.flatMap((g) => g.files));
+    let storyNo = 0;
+    const label = () => `Importing story ${storyNo}/${groups.length} · ${eta.text()}…`;
+    const ticker = setInterval(() => show(label()), 1000);
+    try {
+      for (const g of groups) {
+        storyNo += 1;
+        show(label());
+        let id = null;
+        try {
+          const createRes = await fetch('/stories/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: g.name }),
+          });
+          if (createRes.ok) id = (await createRes.json()).id;
+        } catch (_) { /* fall through */ }
+        if (!id) { g.files.forEach((f) => eta.fileDone(f)); continue; } // skip folder, keep ETA honest
+
+        // Upload the folder's files, 3 at a time, remembering each media id.
+        const ids = new Array(g.files.length).fill(null);
+        const queue = g.files.map((file, idx) => ({ file, idx }));
+        const worker = async () => {
+          for (let it = queue.shift(); it; it = queue.shift()) {
+            const fd = new FormData();
+            fd.append('file', it.file);
+            fd.append('label', it.file.name.replace(/\.[^.]+$/, ''));
+            try {
+              const res = await postFormWithProgress(`/stories/${id}/media`, fd, (sent) => eta.progress(it.file, sent));
+              if (res.ok) {
+                const item = ((await res.json()).items || [])[0];
+                if (item) ids[it.idx] = item.id;
+              }
+            } catch (_) { /* skip failed file */ }
+            eta.fileDone(it.file);
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(3, g.files.length) }, worker));
+
+        // Uploads finish out of order — persist the by-name order.
+        const order = ids.filter((x) => x != null);
+        if (order.length > 1) {
+          await fetch(`/stories/${id}/media/reorder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order }),
+          }).catch(() => {});
+        }
+      }
+    } finally {
+      clearInterval(ticker);
+    }
+    show('');
+    location.reload(); // show the new stories
+  }
+
+  // Button → system folder picker. The user picks the parent folder; each
+  // subfolder becomes a story, and loose files directly inside the parent
+  // become one more story named after the parent itself.
+  btn.addEventListener('click', async () => {
+    if (!window.showDirectoryPicker) { if (input) input.click(); return; }
+    let dir;
+    try {
+      dir = await window.showDirectoryPicker();
+    } catch (err) {
+      if (err && err.name === 'AbortError') return; // user cancelled the picker
+      if (input) input.click(); // API blocked — classic picker
+      return;
+    }
+    show('Reading folders…');
+    const groups = [];
+    const loose = [];
+    for await (const entry of dir.values()) {
+      if (entry.kind === 'directory') groups.push({ name: entry.name, files: await collectDirFiles(entry) });
+      else { try { loose.push(await entry.getFile()); } catch (_) { /* unreadable */ } }
+    }
+    if (loose.length) groups.push({ name: dir.name, files: loose });
+    await importGroups(groups);
+  });
+
+  // Fallback <input webkitdirectory>: also picks the parent folder; group each
+  // file by the subfolder it sits in ("Parent/Sub/x.png" → "Sub"; files right
+  // inside the parent group under the parent's name).
+  if (input) {
+    input.addEventListener('change', async () => {
+      const map = new Map();
+      for (const f of Array.from(input.files || [])) {
+        const seg = (f.webkitRelativePath || f.name).split('/').filter(Boolean);
+        const key = seg.length > 2 ? seg[1] : seg[0];
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(f);
+      }
+      await importGroups([...map.entries()].map(([name, files]) => ({ name, files })));
+      input.value = '';
+    });
+  }
+
+  // Drag & drop: each dropped folder becomes a story (no prompt at all).
+  if (zone) {
+    let depth = 0;
+    const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+    zone.addEventListener('dragenter', (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth += 1;
+      zone.classList.add('drop-active');
+    });
+    zone.addEventListener('dragover', (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    zone.addEventListener('dragleave', () => {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) zone.classList.remove('drop-active');
+    });
+    zone.addEventListener('drop', async (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      zone.classList.remove('drop-active');
+      const entries = Array.from(e.dataTransfer.items || [])
+        .map((it) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null))
+        .filter((en) => en && en.isDirectory);
+      if (!entries.length) return;
+      show('Reading folders…');
+      const groups = [];
+      for (const d of entries) groups.push({ name: d.name, files: await readEntryFiles(d) });
+      await importGroups(groups);
+    });
+  }
 }
 
 function formatDuration(secs) {
@@ -665,7 +900,7 @@ function initMedia() {
       const worker = async () => {
         for (let file = queue.shift(); file; file = queue.shift()) {
           showProgress(Math.min(done + 1, total), total, eta);
-          await uploadFile(file, folderName ? { setTitle: folderName } : {});
+          await uploadFile(file, folderName ? { setTitle: folderName } : {}, (sent) => eta.progress(file, sent));
           eta.fileDone(file);
           done += 1;
         }
@@ -692,12 +927,10 @@ function initMedia() {
   }
 
   // Folder upload via the picker — pulls out images, sorts by name, titles an
-  // untitled story after the folder. NOTE: the browser shows its own (un-
-  // styleable) "Upload N files to this site?" prompt for folder picking; drag a
-  // folder onto the panel instead to skip it.
+  // untitled story after the folder.
   const folderBtn = document.getElementById('addFolderBtn');
   const folderInput = document.getElementById('folderInput');
-  if (folderBtn && folderInput) folderBtn.addEventListener('click', () => folderInput.click());
+  if (folderBtn && folderInput) folderBtn.addEventListener('click', () => pickFolder());
   if (folderInput) {
     folderInput.addEventListener('change', async () => {
       const all = Array.from(folderInput.files || []);
@@ -705,6 +938,24 @@ function initMedia() {
       await uploadList(images, folderNameOf(all[0]));
       folderInput.value = '';
     });
+  }
+
+  // Where the File System Access API exists (Chrome/Edge over https), use the
+  // system directory picker — its lightweight "view files" permission replaces
+  // the scary "Upload N files to this site?" dialog that <input webkitdirectory>
+  // triggers. Other browsers fall back to that input.
+  async function pickFolder() {
+    if (!window.showDirectoryPicker) return folderInput.click();
+    let dir;
+    try {
+      dir = await window.showDirectoryPicker();
+    } catch (err) {
+      if (err && err.name === 'AbortError') return; // user cancelled the picker
+      return folderInput.click(); // API blocked (e.g. plain-http) — classic picker
+    }
+    const files = await collectDirFiles(dir);
+    const images = sortByName(files.filter((f) => (f.type || '').startsWith('image/')));
+    await uploadList(images, dir.name);
   }
 
   // Top folder segment of a webkitdirectory file path ("Folder/img.png" → "Folder").
@@ -725,31 +976,6 @@ function initMedia() {
       const coverTitle = document.getElementById('coverTitle');
       if (coverTitle) coverTitle.textContent = name;
     }
-  }
-
-  // Drag-and-drop folder upload. Dropping a folder reads its files directly via
-  // the entries API, which (unlike folder picking) shows no browser prompt.
-  function readEntryFiles(entry) {
-    return new Promise((resolve) => {
-      if (entry.isFile) {
-        entry.file((f) => resolve([f]), () => resolve([]));
-      } else if (entry.isDirectory) {
-        const reader = entry.createReader();
-        const acc = [];
-        const readBatch = () => reader.readEntries(async (batch) => {
-          if (!batch.length) {
-            const nested = await Promise.all(acc.map(readEntryFiles));
-            resolve(nested.flat());
-          } else {
-            acc.push(...batch);
-            readBatch(); // readEntries yields ~100 at a time; keep going
-          }
-        }, () => resolve([]));
-        readBatch();
-      } else {
-        resolve([]);
-      }
-    });
   }
 
   const dropzone = grid.closest('.panel') || grid;
@@ -795,7 +1021,7 @@ function initMedia() {
     await uploadList(files, folderName);
   });
 
-  async function uploadFile(file, opts = {}) {
+  async function uploadFile(file, opts = {}, onProgress) {
     const tile = makeUploadingTile(file);
     grid.insertBefore(tile, addTile);
     const fd = new FormData();
@@ -803,7 +1029,7 @@ function initMedia() {
     fd.append('label', file.name.replace(/\.[^.]+$/, ''));
     if (opts.setTitle) fd.append('set_title', opts.setTitle);
     try {
-      const res = await fetch(`/stories/${bookId}/media`, { method: 'POST', body: fd });
+      const res = await postFormWithProgress(`/stories/${bookId}/media`, fd, onProgress);
       if (!res.ok) {
         let msg = 'Upload failed';
         try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (_) { /* non-JSON */ }
@@ -1074,7 +1300,7 @@ function initGallery() {
             const fd = new FormData();
             fd.append('file', file);
             try {
-              const res = await fetch('/gallery', { method: 'POST', body: fd });
+              const res = await postFormWithProgress('/gallery', fd, (sent) => eta.progress(file, sent));
               if (res.ok) addTile(await res.json());
             } catch (_) { /* skip failed file */ }
             eta.fileDone(file);

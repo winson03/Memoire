@@ -10,6 +10,13 @@
           <%= total %> <%= total === 1 ? 'story' : 'stories' %> in your library<%= query ? (' matching “' + query + '”') : '' %>.
         </p>
 
+        <div class="panel" id="importDropzone" style="padding:16px 18px;margin-bottom:18px;">
+          <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="importFoldersBtn">⇪ Import folders</button>
+          <span id="importProgress" class="upload-progress" hidden></span>
+          <div class="media-hint" style="margin-top:8px;">Each folder becomes its own private story — named after the folder, with its first photo as the cover. Pick the folder that contains your story folders, or drag several folders here.</div>
+        </div>
+        <input type="file" id="importFolderInput" webkitdirectory directory multiple hidden>
+
         <% if (books.length) { %>
           <div class="cover-grid">
             <% books.forEach(function(book){ %>

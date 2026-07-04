@@ -150,6 +150,24 @@ router.get('/editor', (req, res) => {
   res.render('editor', { book, photos, folders, statusDefs: STATUS_DEFS, themeKeys: THEME_KEYS, blocks: parseBlocks(book.content) });
 });
 
+// ── Bulk folder import: one folder → one private story ───────────────────────
+// Creates the story shell (named after the folder, private, first photo as
+// cover); the client then uploads the folder's files into it one by one.
+router.post('/stories/import', (req, res) => {
+  const title = (req.body.title || '').trim().slice(0, 120) || 'Untitled story';
+  const book = Books.create({
+    user_id: req.user.id,
+    title,
+    author: req.user.name,
+    status: 'private',
+    theme: 'terra',
+    blurb: '',
+    type: 'story',
+  });
+  Books.update(book.id, { title, status: 'private', theme: 'terra', cover_mode: 'first' });
+  res.json({ id: book.id });
+});
+
 // ── Create / Update story ─────────────────────────────────────────────────────
 router.post('/stories/:id', (req, res) => {
   const book = Books.findById(parseInt(req.params.id, 10));

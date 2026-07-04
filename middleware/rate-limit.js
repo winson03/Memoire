@@ -14,9 +14,12 @@ function makeHandler(redirectTo) {
 }
 
 // Broad safety net for the whole app (static assets are served before this).
+// Generous on purpose: bulk folder imports fire one request per photo, so a
+// big import alone can be hundreds of requests. Auth endpoints have their own
+// much stricter limits below.
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 600,
+  limit: 2000,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
