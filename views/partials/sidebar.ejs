@@ -22,7 +22,7 @@
   // Profile + Settings always sit at the bottom.
   navItems.push({ key: 'profile',  label: 'Profile',  href: '/profile' });
   navItems.push({ key: 'settings', label: 'Settings', href: '/settings' });
-  var roleText = 'Storyteller';
+  var roleText = u.role === 'admin' ? 'Admin' : 'Storyteller';
 %>
 <aside class="sidebar" id="sidebar">
   <a href="/dashboard" class="sidebar-logo">
