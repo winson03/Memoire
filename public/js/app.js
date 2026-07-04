@@ -725,67 +725,118 @@ function initFolderImport() {
     try { return el ? JSON.parse(el.textContent) : []; } catch (_) { return []; }
   }
 
-  // Our own popup: list the folders found with checkboxes (all ticked), so the
-  // user picks exactly which ones to import, plus a dropdown choosing which
-  // app folder the new stories go into. Resolves to { groups, folderId },
-  // or null when cancelled.
-  function chooseGroups(groups) {
-    return new Promise((resolve) => {
-      const backdrop = document.createElement('div');
-      backdrop.className = 'dialog-backdrop';
-      const rows = groups.map((g, i) => `
-        <label style="display:flex;align-items:center;gap:10px;padding:7px 2px;cursor:pointer;">
-          <input type="checkbox" checked data-idx="${i}">
-          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g.name)}</span>
-          <span style="opacity:.6;font-size:12px;flex-shrink:0;">${g.files.length} file${g.files.length === 1 ? '' : 's'}</span>
-        </label>`).join('');
-      const folderOptions = ['<option value="">No folder</option>']
-        .concat(appFolders().map((f) => `<option value="${f.id}">${escapeHtml(f.name)}</option>`))
-        .join('');
-      backdrop.innerHTML = `
-        <div class="dialog-card" role="dialog" aria-modal="true">
-          <h3>Import folders</h3>
-          <p>Each ticked folder becomes its own private story, named after the folder, with its first photo as the cover.</p>
-          <div style="max-height:260px;overflow:auto;margin:10px 0;">${rows}</div>
-          <label class="field-label" style="font-size:12px;">Add the new stories to</label>
-          <select class="pseudo-select" id="importIntoFolder" style="width:100%;cursor:pointer;">${folderOptions}</select>
-          <div class="dialog-actions">
-            <button type="button" class="dialog-cancel">Cancel</button>
-            <button type="button" class="dialog-confirm accent">Import</button>
-          </div>
-        </div>`;
-      document.body.appendChild(backdrop);
+  // The one import dialog. It holds a running list of folders to import: you
+  // keep adding folders (Add folder… opens the picker, or drop them in) — since
+  // no browser lets you multi-select folders in one dialog, you build the list
+  // up here — then Import turns each into its own private story. Only one
+  // dialog exists at a time; opening again while it's up just adds to the list.
+  let dlg = null; // { pending: [{name, files}], root: element, rerender, addGroups }
 
-      const card = backdrop.querySelector('.dialog-card');
-      const done = (val) => { backdrop.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
-      const onKey = (e) => { if (e.key === 'Escape') done(null); };
-      backdrop.addEventListener('click', () => done(null));
-      card.addEventListener('click', (e) => e.stopPropagation());
-      backdrop.querySelector('.dialog-cancel').addEventListener('click', () => done(null));
-      backdrop.querySelector('.dialog-confirm').addEventListener('click', () => {
-        done({
-          groups: [...backdrop.querySelectorAll('input[type=checkbox]')]
-            .filter((c) => c.checked)
-            .map((c) => groups[Number(c.dataset.idx)]),
-          folderId: backdrop.querySelector('#importIntoFolder').value || null,
-        });
-      });
-      document.addEventListener('keydown', onKey);
-    });
-  }
+  function openImportDialog(seedGroups) {
+    if (dlg) { if (seedGroups) dlg.addGroups(seedGroups); return; }
 
-  // Normalize → let the user tick which folders to import → run the import.
-  async function confirmAndImport(groups) {
-    groups = normalizeGroups(groups);
-    if (!groups.length) {
-      show('No photos or videos found there.');
-      setTimeout(() => show(''), 4000);
-      return;
+    const backdrop = document.createElement('div');
+    backdrop.className = 'dialog-backdrop';
+    const folderOptions = ['<option value="">No folder</option>']
+      .concat(appFolders().map((f) => `<option value="${f.id}">${escapeHtml(f.name)}</option>`))
+      .join('');
+    backdrop.innerHTML = `
+      <div class="dialog-card" role="dialog" aria-modal="true">
+        <h3>Import folders</h3>
+        <p>Add each folder you want to import — every folder becomes its own private story, named after the folder, with its first photo as the cover.</p>
+        <div id="importDropTarget" style="border:2px dashed rgba(140,100,60,.45);border-radius:12px;padding:20px 16px;margin:12px 0;text-align:center;font-size:13px;opacity:.85;cursor:pointer;">
+          Drop folders here, or <span style="text-decoration:underline;">click to add a folder</span>
+        </div>
+        <div id="importList" style="max-height:230px;overflow:auto;margin:10px 0;"></div>
+        <label class="field-label" style="font-size:12px;">Add the new stories to</label>
+        <select class="pseudo-select" id="importIntoFolder" style="width:100%;cursor:pointer;">${folderOptions}</select>
+        <div class="dialog-actions">
+          <button type="button" class="dialog-cancel">Cancel</button>
+          <button type="button" class="dialog-confirm accent" id="importGo" disabled>Import</button>
+        </div>
+      </div>`;
+    document.body.appendChild(backdrop);
+
+    const card = backdrop.querySelector('.dialog-card');
+    const target = backdrop.querySelector('#importDropTarget');
+    const list = backdrop.querySelector('#importList');
+    const goBtn = backdrop.querySelector('#importGo');
+    const pending = [];
+
+    const close = () => { backdrop.remove(); document.removeEventListener('keydown', onKey); dlg = null; };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+
+    function rerender() {
+      if (!pending.length) {
+        list.innerHTML = '<div style="opacity:.55;font-size:13px;padding:6px 2px;">No folders added yet.</div>';
+      } else {
+        list.innerHTML = pending.map((g, i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:7px 2px;">
+            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g.name)}</span>
+            <span style="opacity:.6;font-size:12px;flex-shrink:0;">${g.files.length} file${g.files.length === 1 ? '' : 's'}</span>
+            <button type="button" data-rm="${i}" title="Remove" style="border:none;background:none;cursor:pointer;font-size:16px;opacity:.6;line-height:1;">×</button>
+          </div>`).join('');
+      }
+      goBtn.disabled = !pending.length;
+      goBtn.textContent = pending.length ? `Import ${pending.length} ${pending.length === 1 ? 'story' : 'stories'}` : 'Import';
     }
-    show('');
-    const picked = await chooseGroups(groups);
-    if (picked && picked.groups.length) await importGroups(picked.groups, picked.folderId);
+
+    // Add folders, keeping only those with media and skipping duplicates (by
+    // name) already in the list.
+    function addGroups(groups) {
+      const clean = normalizeGroups(groups);
+      let added = 0;
+      for (const g of clean) {
+        if (pending.some((p) => p.name === g.name)) continue;
+        pending.push(g);
+        added += 1;
+      }
+      rerender();
+      if (!added && clean.length === 0) flashTarget('No photos or videos in there');
+    }
+
+    let flashTimer = null;
+    function flashTarget(msg) {
+      target.dataset.msg = target.dataset.msg || target.textContent;
+      target.textContent = msg;
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => { target.innerHTML = 'Drop folders here, or <span style="text-decoration:underline;">click to add a folder</span>'; }, 2500);
+    }
+
+    list.addEventListener('click', (e) => {
+      const rm = e.target.closest('[data-rm]');
+      if (rm) { pending.splice(Number(rm.dataset.rm), 1); rerender(); }
+    });
+
+    target.addEventListener('click', async () => { const g = await pickFolderGroups(); if (g) addGroups(g); });
+    target.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; target.classList.add('drop-active'); });
+    target.addEventListener('dragleave', () => target.classList.remove('drop-active'));
+    target.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      target.classList.remove('drop-active');
+      const g = await groupsFromDrop(e);
+      if (g) addGroups(g);
+    });
+
+    backdrop.addEventListener('click', close);
+    card.addEventListener('click', (e) => e.stopPropagation());
+    backdrop.querySelector('.dialog-cancel').addEventListener('click', close);
+    goBtn.addEventListener('click', async () => {
+      if (!pending.length) return;
+      const folderId = backdrop.querySelector('#importIntoFolder').value || null;
+      const groups = pending.slice();
+      close();
+      await importGroups(groups, folderId);
+    });
+    document.addEventListener('keydown', onKey);
+
+    dlg = { pending, addGroups };
+    rerender();
+    if (seedGroups) addGroups(seedGroups);
   }
+
+  // Kept name for existing drop callers — funnel into the accumulating dialog.
+  function confirmAndImport(groups) { openImportDialog(groups); }
 
   // groups: [{ name, files }] — each becomes one private story named after the
   // folder, files in name order, first photo as the cover, filed into the
@@ -847,20 +898,39 @@ function initFolderImport() {
     location.reload(); // show the new stories
   }
 
-  // Button → system folder picker. The user picks the parent folder; each
-  // subfolder becomes a story, and loose files directly inside the parent
-  // become one more story named after the parent itself.
-  btn.addEventListener('click', async () => {
-    if (!window.showDirectoryPicker) { if (input) input.click(); return; }
+  // Pull folder groups out of a drag-and-drop event: each dropped folder =
+  // one group. Returns null when nothing droppable was there.
+  async function groupsFromDrop(e) {
+    const entries = Array.from(e.dataTransfer.items || [])
+      .map((it) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null))
+      .filter((en) => en && en.isDirectory);
+    if (!entries.length) return null;
+    const groups = [];
+    for (const d of entries) groups.push({ name: d.name, files: await readEntryFiles(d) });
+    return groups;
+  }
+
+  // Open the system folder picker for ONE folder and return its groups:
+  // its subfolders each become a group, and loose files right inside it
+  // become one group named after the folder itself. Returns null on cancel.
+  // (The browser shows its own folder-access confirmation here — unavoidable
+  // for browsing; drag-and-drop avoids it.)
+  let pendingPickerResolve = null;
+  async function pickFolderGroups() {
+    if (!window.showDirectoryPicker) {
+      // No File System Access API — fall back to <input webkitdirectory>, which
+      // resolves asynchronously via its change handler below.
+      if (!input) return null;
+      return new Promise((resolve) => { pendingPickerResolve = resolve; input.click(); });
+    }
     let dir;
     try {
       dir = await window.showDirectoryPicker();
     } catch (err) {
-      if (err && err.name === 'AbortError') return; // user cancelled the picker
-      if (input) input.click(); // API blocked — classic picker
-      return;
+      if (err && err.name === 'AbortError') return null; // user cancelled
+      if (!input) return null;
+      return new Promise((resolve) => { pendingPickerResolve = resolve; input.click(); });
     }
-    show('Reading folders…');
     const groups = [];
     const loose = [];
     for await (const entry of dir.values()) {
@@ -868,12 +938,16 @@ function initFolderImport() {
       else { try { loose.push(await entry.getFile()); } catch (_) { /* unreadable */ } }
     }
     if (loose.length) groups.push({ name: dir.name, files: loose });
-    await confirmAndImport(groups);
-  });
+    return groups;
+  }
 
-  // Fallback <input webkitdirectory>: also picks the parent folder; group each
-  // file by the subfolder it sits in ("Parent/Sub/x.png" → "Sub"; files right
-  // inside the parent group under the parent's name).
+  // Button → open the accumulating import dialog.
+  btn.addEventListener('click', () => openImportDialog());
+
+  // Fallback <input webkitdirectory>: picks one parent folder; group each file
+  // by the subfolder it sits in ("Parent/Sub/x.png" → "Sub"; files right inside
+  // the parent group under the parent's name). Result goes back to whoever is
+  // awaiting the picker, or opens the dialog directly.
   if (input) {
     input.addEventListener('change', async () => {
       const map = new Map();
@@ -883,8 +957,10 @@ function initFolderImport() {
         if (!map.has(key)) map.set(key, []);
         map.get(key).push(f);
       }
-      await confirmAndImport([...map.entries()].map(([name, files]) => ({ name, files })));
+      const groups = [...map.entries()].map(([name, files]) => ({ name, files }));
       input.value = '';
+      if (pendingPickerResolve) { const r = pendingPickerResolve; pendingPickerResolve = null; r(groups); }
+      else openImportDialog(groups); // input used directly (no dialog awaiting)
     });
   }
 
@@ -912,13 +988,9 @@ function initFolderImport() {
       e.preventDefault();
       depth = 0;
       zone.classList.remove('drop-active');
-      const entries = Array.from(e.dataTransfer.items || [])
-        .map((it) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null))
-        .filter((en) => en && en.isDirectory);
-      if (!entries.length) return;
+      const groups = await groupsFromDrop(e);
+      if (!groups) return;
       show('Reading folders…');
-      const groups = [];
-      for (const d of entries) groups.push({ name: d.name, files: await readEntryFiles(d) });
       await confirmAndImport(groups);
     });
   }

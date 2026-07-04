@@ -13,7 +13,7 @@
         <div class="panel" id="importDropzone" style="padding:16px 18px;margin-bottom:18px;">
           <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="importFoldersBtn">⇪ Import folders</button>
           <span id="importProgress" class="upload-progress" hidden></span>
-          <div class="media-hint" style="margin-top:8px;">Each folder becomes its own private story — named after the folder, with its first photo as the cover. Pick the folder that contains your story folders (you'll tick which ones to import), or drag several folders straight onto this panel.</div>
+          <div class="media-hint" style="margin-top:8px;">Each folder becomes its own private story — named after the folder, with its first photo as the cover. Click the button, then add as many folders as you like (one at a time, or drag several in), and import them together.</div>
         </div>
         <input type="file" id="importFolderInput" webkitdirectory directory multiple hidden>
         <script type="application/json" id="importFoldersData"><%- JSON.stringify(folders.map(function(f){ return { id: f.id, name: f.name }; })).replace(/</g, '\\u003c') %></script>
