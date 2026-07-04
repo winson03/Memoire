@@ -28,7 +28,10 @@
             <div class="gallery-tile" data-id="<%= img.id %>">
               <button type="button" class="media-remove" data-del="<%= img.id %>" title="Remove">×</button>
               <a class="media-download" href="/gallery/<%= img.id %>/raw?download=1" download title="Download">↓</a>
-              <% if ((img.mime || '').startsWith('video/')) { %>
+              <% if ((img.telegram_file_id || '').startsWith('yt:')) { %>
+                <img src="https://i.ytimg.com/vi/<%= img.telegram_file_id.slice(3) %>/hqdefault.jpg" alt="" loading="lazy" data-yt="<%= img.telegram_file_id.slice(3) %>">
+                <div class="media-play">▶</div>
+              <% } else if ((img.mime || '').startsWith('video/')) { %>
                 <video src="/gallery/<%= img.id %>/raw" muted preload="metadata"></video>
                 <div class="media-play">▶</div>
               <% } else { %>

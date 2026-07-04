@@ -61,6 +61,14 @@ template). Key groups:
 - **Google OAuth** — `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
   (`http://localhost:8000/auth/google/callback`). The same redirect URI must be registered in
   the Google Cloud console. If unset, the Google button is disabled and guest mode still works.
+- **YouTube (large videos)** — admin-uploaded videos over `YOUTUBE_UPLOAD_THRESHOLD_MB`
+  (default 15) are uploaded to the connected YouTube channel as *Unlisted* and embedded,
+  because the public Telegram Bot API cannot serve back files over 20 MB. One-time setup:
+  enable **YouTube Data API v3** in the same Google Cloud project as the OAuth client, add
+  `<origin>/settings/youtube/callback` (localhost **and** the live domain) to the client's
+  authorized redirect URIs, then click **Connect YouTube** in Settings as an admin. Note:
+  upload quota is ~6 videos/day by default, and if the OAuth consent screen is in *Testing*
+  mode the connection expires every 7 days (publish the consent screen to avoid this).
 - **App** — `PORT` (default 8000), `SESSION_SECRET`, `DATABASE_PATH`.
 
 ## How the design maps to code

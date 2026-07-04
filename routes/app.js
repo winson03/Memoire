@@ -8,6 +8,7 @@ const { Users, Books, Folders, Collections, Favourites, Notifications, Media } =
 const { greeting, firstName, storageStats } = require('../lib/view-helpers');
 const { statusLabel, readersTxt } = require('../lib/themes');
 const storage = require('../lib/storage');
+const youtube = require('../lib/youtube');
 const bcrypt = require('bcryptjs');
 
 const avatarUpload = multer({
@@ -482,7 +483,34 @@ router.post('/admin/users/:id/delete', ensureAdmin, (req, res) => {
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 router.get('/settings', (req, res) => {
-  res.render('settings', { storage: storageStats() });
+  res.render('settings', {
+    storage: storageStats(),
+    youtubeConfigured: youtube.isConfigured(),
+    youtubeConnected: youtube.isConnected(),
+  });
+});
+
+// One-time YouTube channel connection (admin only) — big videos upload there.
+const youtubeRedirect = (req) => `${req.protocol}://${req.get('host')}/settings/youtube/callback`;
+
+router.get('/settings/youtube/connect', ensureAdmin, (req, res) => {
+  if (!youtube.isConfigured()) {
+    req.flash('info', 'Google OAuth is not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).');
+    return res.redirect('/settings');
+  }
+  res.redirect(youtube.authUrl(youtubeRedirect(req)));
+});
+
+router.get('/settings/youtube/callback', ensureAdmin, async (req, res) => {
+  try {
+    if (!req.query.code) throw new Error(req.query.error || 'no code returned');
+    await youtube.handleCallback(req.query.code, youtubeRedirect(req));
+    req.flash('info', 'YouTube connected — large videos will upload there.');
+  } catch (err) {
+    console.error('[youtube connect]', err.message);
+    req.flash('info', 'YouTube connection failed: ' + err.message);
+  }
+  res.redirect('/settings');
 });
 
 router.post('/settings/account', (req, res) => {

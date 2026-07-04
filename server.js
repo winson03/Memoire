@@ -35,6 +35,8 @@ app.use(helmet({
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
       imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
       mediaSrc: ["'self'", 'blob:'],
+      // PDF previews are same-origin iframes; large videos embed from YouTube.
+      frameSrc: ["'self'", 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
       objectSrc: ["'none'"],
       frameAncestors: ["'self'"],
       // Only force-upgrade http→https in production; on a plain-HTTP LAN
