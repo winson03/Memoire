@@ -491,7 +491,13 @@ router.get('/settings', (req, res) => {
 });
 
 // One-time YouTube channel connection (admin only) — big videos upload there.
-const youtubeRedirect = (req) => `${req.protocol}://${req.get('host')}/settings/youtube/callback`;
+// Honour x-forwarded-proto directly: behind Render's proxy req.protocol is
+// only https when trust proxy is on, and a derived http:// URI would fail
+// Google's exact-match redirect_uri check.
+const youtubeRedirect = (req) => {
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol).split(',')[0].trim();
+  return `${proto}://${req.get('host')}/settings/youtube/callback`;
+};
 
 router.get('/settings/youtube/connect', ensureAdmin, (req, res) => {
   if (!youtube.isConfigured()) {
