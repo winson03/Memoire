@@ -152,19 +152,32 @@ router.get('/editor', (req, res) => {
 
 // ── Bulk folder import: one folder → one private story ───────────────────────
 // Creates the story shell (named after the folder, private, first photo as
-// cover); the client then uploads the folder's files into it one by one.
+// cover, filed into the chosen app folder); the client then uploads the
+// folder's files into it one by one.
 router.post('/stories/import', (req, res) => {
   const title = (req.body.title || '').trim().slice(0, 120) || 'Untitled story';
+  const folderId = req.body.folder_id ? parseInt(req.body.folder_id, 10) : null;
+  const folder = folderId ? Folders.findById(folderId) : null;
+  const dest = folder && folder.user_id === req.user.id ? folder : null;
   const book = Books.create({
     user_id: req.user.id,
     title,
     author: req.user.name,
+    series: dest ? dest.name : null,
+    folder_id: dest ? dest.id : null,
     status: 'private',
     theme: 'terra',
     blurb: '',
     type: 'story',
   });
-  Books.update(book.id, { title, status: 'private', theme: 'terra', cover_mode: 'first' });
+  Books.update(book.id, {
+    title,
+    status: 'private',
+    theme: 'terra',
+    cover_mode: 'first',
+    series: dest ? dest.name : null,
+    folder_id: dest ? dest.id : null,
+  });
   res.json({ id: book.id });
 });
 

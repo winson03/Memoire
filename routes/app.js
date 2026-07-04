@@ -104,7 +104,8 @@ router.get('/library', (req, res) => {
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
   const books = all.slice((page - 1) * perPage, page * perPage);
-  res.render('library', { books, page, totalPages, total, query: q });
+  // Folder list feeds the bulk-import popup's "add to folder" dropdown.
+  res.render('library', { books, page, totalPages, total, query: q, folders: Folders.listForUser(req.user.id) });
 });
 
 // ── Discover (all published stories, paginated) ───────────────────────────────

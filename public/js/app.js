@@ -710,15 +710,87 @@ function initFolderImport() {
   const isMedia = (f) => /^(image|video)\//.test(f.type || '');
   const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 
-  // groups: [{ name, files }] — each becomes one private story named after the
-  // folder, files in name order, first photo as the cover.
-  async function importGroups(groups) {
-    groups = groups
+  // Keep only photo/video files, sort everything by name, drop empty folders.
+  function normalizeGroups(groups) {
+    return groups
       .map((g) => ({ name: g.name, files: g.files.filter(isMedia).sort(byName) }))
       .filter((g) => g.files.length)
       .sort(byName);
-    if (!groups.length) { show(''); return; }
+  }
 
+  // The user's app folders (for the "add to folder" dropdown), embedded by the
+  // library view as JSON.
+  function appFolders() {
+    const el = document.getElementById('importFoldersData');
+    try { return el ? JSON.parse(el.textContent) : []; } catch (_) { return []; }
+  }
+
+  // Our own popup: list the folders found with checkboxes (all ticked), so the
+  // user picks exactly which ones to import, plus a dropdown choosing which
+  // app folder the new stories go into. Resolves to { groups, folderId },
+  // or null when cancelled.
+  function chooseGroups(groups) {
+    return new Promise((resolve) => {
+      const backdrop = document.createElement('div');
+      backdrop.className = 'dialog-backdrop';
+      const rows = groups.map((g, i) => `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 2px;cursor:pointer;">
+          <input type="checkbox" checked data-idx="${i}">
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g.name)}</span>
+          <span style="opacity:.6;font-size:12px;flex-shrink:0;">${g.files.length} file${g.files.length === 1 ? '' : 's'}</span>
+        </label>`).join('');
+      const folderOptions = ['<option value="">No folder</option>']
+        .concat(appFolders().map((f) => `<option value="${f.id}">${escapeHtml(f.name)}</option>`))
+        .join('');
+      backdrop.innerHTML = `
+        <div class="dialog-card" role="dialog" aria-modal="true">
+          <h3>Import folders</h3>
+          <p>Each ticked folder becomes its own private story, named after the folder, with its first photo as the cover.</p>
+          <div style="max-height:260px;overflow:auto;margin:10px 0;">${rows}</div>
+          <label class="field-label" style="font-size:12px;">Add the new stories to</label>
+          <select class="pseudo-select" id="importIntoFolder" style="width:100%;cursor:pointer;">${folderOptions}</select>
+          <div class="dialog-actions">
+            <button type="button" class="dialog-cancel">Cancel</button>
+            <button type="button" class="dialog-confirm accent">Import</button>
+          </div>
+        </div>`;
+      document.body.appendChild(backdrop);
+
+      const card = backdrop.querySelector('.dialog-card');
+      const done = (val) => { backdrop.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+      const onKey = (e) => { if (e.key === 'Escape') done(null); };
+      backdrop.addEventListener('click', () => done(null));
+      card.addEventListener('click', (e) => e.stopPropagation());
+      backdrop.querySelector('.dialog-cancel').addEventListener('click', () => done(null));
+      backdrop.querySelector('.dialog-confirm').addEventListener('click', () => {
+        done({
+          groups: [...backdrop.querySelectorAll('input[type=checkbox]')]
+            .filter((c) => c.checked)
+            .map((c) => groups[Number(c.dataset.idx)]),
+          folderId: backdrop.querySelector('#importIntoFolder').value || null,
+        });
+      });
+      document.addEventListener('keydown', onKey);
+    });
+  }
+
+  // Normalize → let the user tick which folders to import → run the import.
+  async function confirmAndImport(groups) {
+    groups = normalizeGroups(groups);
+    if (!groups.length) {
+      show('No photos or videos found there.');
+      setTimeout(() => show(''), 4000);
+      return;
+    }
+    show('');
+    const picked = await chooseGroups(groups);
+    if (picked && picked.groups.length) await importGroups(picked.groups, picked.folderId);
+  }
+
+  // groups: [{ name, files }] — each becomes one private story named after the
+  // folder, files in name order, first photo as the cover, filed into the
+  // chosen app folder (folderId may be null).
+  async function importGroups(groups, folderId) {
     const eta = makeUploadEta(groups.flatMap((g) => g.files));
     let storyNo = 0;
     const label = () => `Importing story ${storyNo}/${groups.length} · ${eta.text()}…`;
@@ -732,7 +804,7 @@ function initFolderImport() {
           const createRes = await fetch('/stories/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: g.name }),
+            body: JSON.stringify({ title: g.name, folder_id: folderId }),
           });
           if (createRes.ok) id = (await createRes.json()).id;
         } catch (_) { /* fall through */ }
@@ -796,7 +868,7 @@ function initFolderImport() {
       else { try { loose.push(await entry.getFile()); } catch (_) { /* unreadable */ } }
     }
     if (loose.length) groups.push({ name: dir.name, files: loose });
-    await importGroups(groups);
+    await confirmAndImport(groups);
   });
 
   // Fallback <input webkitdirectory>: also picks the parent folder; group each
@@ -811,7 +883,7 @@ function initFolderImport() {
         if (!map.has(key)) map.set(key, []);
         map.get(key).push(f);
       }
-      await importGroups([...map.entries()].map(([name, files]) => ({ name, files })));
+      await confirmAndImport([...map.entries()].map(([name, files]) => ({ name, files })));
       input.value = '';
     });
   }
@@ -847,7 +919,7 @@ function initFolderImport() {
       show('Reading folders…');
       const groups = [];
       for (const d of entries) groups.push({ name: d.name, files: await readEntryFiles(d) });
-      await importGroups(groups);
+      await confirmAndImport(groups);
     });
   }
 }
