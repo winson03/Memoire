@@ -10,7 +10,11 @@ const { statusLabel, readersTxt } = require('../lib/themes');
 const storage = require('../lib/storage');
 const bcrypt = require('bcryptjs');
 
-const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, /^image\//.test(file.mimetype)),
+});
 
 function initialsFromName(name = '') {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
@@ -258,7 +262,7 @@ router.post('/profile/password', (req, res) => {
   const fail = (msg) => { req.flash('error', msg); return res.redirect('/profile/edit'); };
 
   if (hasPassword && !bcrypt.compareSync(current, req.user.password_hash)) return fail('Current password is incorrect.');
-  if (next.length < 6) return fail('New password must be at least 6 characters.');
+  if (next.length < 8) return fail('New password must be at least 8 characters.');
   if (next !== confirm) return fail('New passwords do not match.');
 
   Users.setPassword(req.user.id, bcrypt.hashSync(next, 10));
@@ -384,7 +388,7 @@ router.post('/admin/users', ensureAdmin, (req, res) => {
   if (username && Users.findByUsername(username)) return fail('That username is already taken.');
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('Please enter a valid email address.');
   if (Users.findByEmail(email)) return fail('That email is already registered.');
-  if (password.length < 6) return fail('Password must be at least 6 characters.');
+  if (password.length < 8) return fail('Password must be at least 8 characters.');
 
   const user = Users.create({
     name,
@@ -429,7 +433,7 @@ router.post('/admin/users/:id', ensureAdmin, (req, res) => {
   if (username) { const c = Users.findByUsername(username); if (c && c.id !== id) return fail('That username is taken.'); }
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('Please enter a valid email address.');
   if (email) { const c = Users.findByEmail(email); if (c && c.id !== id) return fail('That email is already in use.'); }
-  if (newPassword && newPassword.length < 6) return fail('New password must be at least 6 characters.');
+  if (newPassword && newPassword.length < 8) return fail('New password must be at least 8 characters.');
 
   Users.adminUpdate(id, { name, username, handle: username || target.handle, email, phone, dob, bio, role, initials: initialsFromName(name) });
   if (newPassword) Users.setPassword(id, bcrypt.hashSync(newPassword, 10));

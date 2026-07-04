@@ -6,7 +6,12 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { passport, hasGoogle, initialsFromName } = require('../lib/passport');
 const { Users } = require('../lib/queries');
+const { authLimiter, resetLimiter } = require('../middleware/rate-limit');
 const mailer = require('../lib/mailer');
+
+// Reset tokens are stored hashed so a leaked DB (or DB backup) can't be used
+// to take over accounts; only the emailed link holds the raw token.
+const hashToken = (t) => crypto.createHash('sha256').update(t).digest('hex');
 
 // ── Google OAuth ──────────────────────────────────────────────────────────────
 if (hasGoogle) {
@@ -19,7 +24,7 @@ if (hasGoogle) {
 }
 
 // ── Local sign-in (username + password) ─────────────────────────────────────────
-router.post('/login', passport.authenticate('local', {
+router.post('/login', authLimiter, passport.authenticate('local', {
   successRedirect: '/dashboard',
   failureRedirect: '/login',
   failureFlash: true,
@@ -27,7 +32,7 @@ router.post('/login', passport.authenticate('local', {
 
 // ── Register a local account ────────────────────────────────────────────────────
 // Required: username, email, password. Optional: phone, date of birth.
-router.post('/register', (req, res, next) => {
+router.post('/register', authLimiter, (req, res, next) => {
   const username = (req.body.username || '').trim();
   const email = (req.body.email || '').trim().toLowerCase();
   const password = req.body.password || '';
@@ -38,7 +43,7 @@ router.post('/register', (req, res, next) => {
 
   if (!/^[A-Za-z0-9_.-]{3,32}$/.test(username)) return fail('Username must be 3–32 characters (letters, numbers, . _ -).');
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('Please enter a valid email address.');
-  if (password.length < 6) return fail('Password must be at least 6 characters.');
+  if (password.length < 8) return fail('Password must be at least 8 characters.');
   if (Users.findByUsername(username)) return fail('That username is already taken.');
   if (Users.findByEmail(email)) return fail('That email is already registered.');
 
@@ -63,7 +68,7 @@ router.post('/register', (req, res, next) => {
 });
 
 // ── Forgot password — email a reset link ────────────────────────────────────────
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', resetLimiter, async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
   const user = email ? Users.findByEmail(email) : null;
 
@@ -72,7 +77,7 @@ router.post('/forgot-password', async (req, res) => {
   if (user && user.password_hash) {
     const token = crypto.randomBytes(32).toString('hex');
     const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
-    Users.setResetToken(user.id, token, expires);
+    Users.setResetToken(user.id, hashToken(token), expires);
     const url = `${req.protocol}://${req.get('host')}/reset-password?token=${token}`;
     try { await mailer.sendPasswordReset(user.email, user.name, url); } catch (e) { console.error('[forgot-password]', e.message); }
   }
@@ -81,16 +86,16 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // ── Reset password — consume the token ──────────────────────────────────────────
-router.post('/reset-password', (req, res) => {
+router.post('/reset-password', resetLimiter, (req, res) => {
   const token = req.body.token || '';
-  const user = Users.findByValidResetToken(token);
+  const user = token ? Users.findByValidResetToken(hashToken(token)) : null;
   if (!user) {
     req.flash('error', 'That reset link is invalid or has expired.');
     return res.redirect('/forgot-password');
   }
   const password = req.body.password || '';
-  if (password.length < 6) {
-    req.flash('error', 'Password must be at least 6 characters.');
+  if (password.length < 8) {
+    req.flash('error', 'Password must be at least 8 characters.');
     return res.redirect('/reset-password?token=' + encodeURIComponent(token));
   }
   if (password !== (req.body.confirm_password || '')) {

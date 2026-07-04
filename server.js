@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const path = require('path');
 const express = require('express');
+const helmet = require('helmet');
 const session = require('express-session');
 const SqliteStore = require('better-sqlite3-session-store')(session);
 const flash = require('connect-flash');
@@ -16,6 +17,35 @@ const themes = require('./lib/themes');
 const { locals } = require('./middleware/auth');
 
 const app = express();
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+// ── Security ─────────────────────────────────────────────────────────────────
+// Behind a reverse proxy (nginx/Render/Railway) the proxy terminates HTTPS;
+// trusting it lets secure cookies and per-IP rate limits see the real client.
+if (IS_PROD) app.set('trust proxy', 1);
+
+// Security headers. The CSP mirrors what the views actually load: same-origin
+// everything, inline <script>/<style>, Google Fonts, and Google profile photos.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      mediaSrc: ["'self'", 'blob:'],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'self'"],
+      // Only force-upgrade http→https in production; on a plain-HTTP LAN
+      // address this directive would break every asset request.
+      ...(IS_PROD ? {} : { upgradeInsecureRequests: null }),
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'same-origin' },
+  hsts: IS_PROD,
+}));
 
 // ── View engine ──────────────────────────────────────────────────────────────
 app.set('view engine', 'ejs');
@@ -24,13 +54,22 @@ app.set('views', path.join(__dirname, 'views'));
 // Static assets.
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Body parsers.
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// Broad per-IP rate limit (mounted after static so assets don't count).
+const { globalLimiter } = require('./middleware/rate-limit');
+app.use(globalLimiter);
+
+// Body parsers. File uploads go through multer with its own size limits, so
+// these only need to fit forms and story text.
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use(express.json({ limit: '2mb' }));
 
 // Sessions. Login lasts SESSION_MAX_AGE_DAYS from sign-in (default 365 = one
 // year). Sessions are persisted in SQLite, so they survive server restarts.
 const SESSION_DAYS = Number(process.env.SESSION_MAX_AGE_DAYS) || 365;
+if (IS_PROD && !process.env.SESSION_SECRET) {
+  console.error('FATAL: SESSION_SECRET must be set in production — refusing to start with the built-in dev secret.');
+  process.exit(1);
+}
 app.use(session({
   store: new SqliteStore({
     client: db,
@@ -39,7 +78,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'memoire-dev-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * SESSION_DAYS },
+  cookie: { httpOnly: true, sameSite: 'lax', secure: IS_PROD, maxAge: 1000 * 60 * 60 * 24 * SESSION_DAYS },
 }));
 
 // Auth + flash.
