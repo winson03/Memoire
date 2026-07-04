@@ -879,7 +879,7 @@ function initFolderImport() {
             eta.fileDone(it.file);
           }
         };
-        await Promise.all(Array.from({ length: Math.min(3, g.files.length) }, worker));
+        await Promise.all(Array.from({ length: Math.min(2, g.files.length) }, worker));
 
         // Uploads finish out of order — persist the by-name order.
         const order = ids.filter((x) => x != null);
@@ -1030,7 +1030,7 @@ function initMedia() {
   // Placeholder tiles are created in file order as uploads start and replaced
   // in place, so the grid keeps the sorted order even when uploads finish out
   // of order; saveOrder() at the end makes the server match the grid.
-  const UPLOAD_CONCURRENCY = 3;
+  const UPLOAD_CONCURRENCY = 2;
   async function uploadList(files, folderName) {
     if (!files.length) return;
     if (folderName) applyFolderTitle(folderName);
@@ -1451,7 +1451,7 @@ function initGallery() {
             done += 1;
           }
         };
-        await Promise.all(Array.from({ length: Math.min(3, files.length) }, worker));
+        await Promise.all(Array.from({ length: Math.min(2, files.length) }, worker));
       } finally {
         clearInterval(ticker);
       }
