@@ -598,6 +598,33 @@ function initCover() {
   }
 }
 
+// ── Batch-upload time estimate ───────────────────────────────────────────────
+// Files upload one at a time, and each request only resolves once the server
+// (and the storage backend behind it) has finished — so the only reliable
+// signal is completed bytes per second. The estimate firms up as files land.
+function makeUploadEta(files) {
+  const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
+  const start = Date.now();
+  let doneBytes = 0;
+  return {
+    fileDone(file) { doneBytes += (file.size || 0); },
+    text() {
+      const elapsed = (Date.now() - start) / 1000;
+      if (!doneBytes || !totalBytes || elapsed < 1) return 'estimating time…';
+      const secsLeft = (totalBytes - doneBytes) / (doneBytes / elapsed);
+      return `about ${formatDuration(secsLeft)} left`;
+    },
+  };
+}
+
+function formatDuration(secs) {
+  secs = Math.max(1, Math.round(secs));
+  if (secs < 60) return `${secs}s`;
+  const m = Math.floor(secs / 60);
+  if (m < 60) return secs % 60 ? `${m}m ${secs % 60}s` : `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
 // ── Editor media: upload / remove / reorder ─────────────────────────────────
 function initMedia() {
   const grid = document.getElementById('mediaGrid');
@@ -612,28 +639,44 @@ function initMedia() {
   if (addTile) addTile.addEventListener('click', trigger);
 
   const progress = document.getElementById('uploadProgress');
-  function showProgress(done, total) {
+  function showProgress(done, total, eta) {
     if (!progress) return;
     if (total <= 0) { progress.hidden = true; progress.textContent = ''; return; }
     progress.hidden = false;
-    progress.textContent = `Uploading ${done}/${total}…`;
+    progress.textContent = `Uploading ${done}/${total}${eta ? ` · ${eta.text()}` : ''}…`;
   }
 
-  // Upload a list of files in order. When folderName is set, an untitled story
-  // is renamed after it (mirrored on the server via set_title).
+  // Upload a list of files, a few at a time. When folderName is set, an
+  // untitled story is renamed after it (mirrored on the server via set_title).
+  // Placeholder tiles are created in file order as uploads start and replaced
+  // in place, so the grid keeps the sorted order even when uploads finish out
+  // of order; saveOrder() at the end makes the server match the grid.
+  const UPLOAD_CONCURRENCY = 3;
   async function uploadList(files, folderName) {
     if (!files.length) return;
     if (folderName) applyFolderTitle(folderName);
     const total = files.length;
+    const eta = makeUploadEta(files);
     let done = 0;
-    showProgress(done, total);
-    for (const file of files) {
-      showProgress(done + 1, total);
-      await uploadFile(file, folderName ? { setTitle: folderName } : {});
-      done += 1;
+    // Tick every second so the time-left estimate counts down between files.
+    const ticker = setInterval(() => showProgress(Math.min(done + 1, total), total, eta), 1000);
+    try {
+      const queue = files.slice();
+      const worker = async () => {
+        for (let file = queue.shift(); file; file = queue.shift()) {
+          showProgress(Math.min(done + 1, total), total, eta);
+          await uploadFile(file, folderName ? { setTitle: folderName } : {});
+          eta.fileDone(file);
+          done += 1;
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, total) }, worker));
+    } finally {
+      clearInterval(ticker);
     }
     showProgress(0, 0);
     refreshOrders();
+    if (total > 1) await saveOrder();
   }
 
   // Natural file-name sort: 1,2,…,10 (not 1,10,2); non-numeric names fall to A–Z.
@@ -992,11 +1035,11 @@ function initGallery() {
 
   if (btn && input) btn.addEventListener('click', () => input.click());
 
-  function showProgress(done, total) {
+  function showProgress(done, total, eta) {
     if (!progress) return;
     if (total <= 0) { progress.hidden = true; progress.textContent = ''; return; }
     progress.hidden = false;
-    progress.textContent = `Uploading ${done}/${total}…`;
+    progress.textContent = `Uploading ${done}/${total}${eta ? ` · ${eta.text()}` : ''}…`;
   }
 
   function addTile(img) {
@@ -1018,17 +1061,29 @@ function initGallery() {
   if (input) {
     input.addEventListener('change', async () => {
       const files = Array.from(input.files || []).filter((f) => /^(image|video)\//.test(f.type || ''));
+      if (!files.length) { input.value = ''; return; }
+      const eta = makeUploadEta(files);
       let done = 0;
-      showProgress(done, files.length);
-      for (const file of files) {
-        showProgress(done + 1, files.length);
-        const fd = new FormData();
-        fd.append('file', file);
-        try {
-          const res = await fetch('/gallery', { method: 'POST', body: fd });
-          if (res.ok) addTile(await res.json());
-        } catch (_) { /* skip failed file */ }
-        done += 1;
+      const ticker = setInterval(() => showProgress(Math.min(done + 1, files.length), files.length, eta), 1000);
+      try {
+        // A few files travel at once — much faster for big batches.
+        const queue = files.slice();
+        const worker = async () => {
+          for (let file = queue.shift(); file; file = queue.shift()) {
+            showProgress(Math.min(done + 1, files.length), files.length, eta);
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+              const res = await fetch('/gallery', { method: 'POST', body: fd });
+              if (res.ok) addTile(await res.json());
+            } catch (_) { /* skip failed file */ }
+            eta.fileDone(file);
+            done += 1;
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(3, files.length) }, worker));
+      } finally {
+        clearInterval(ticker);
       }
       showProgress(0, 0);
       input.value = '';
