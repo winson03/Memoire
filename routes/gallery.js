@@ -11,7 +11,6 @@ const router = express.Router();
 const { ensureAuth } = require('../middleware/auth');
 const { Gallery } = require('../lib/queries');
 const storage = require('../lib/storage');
-const youtube = require('../lib/youtube');
 
 // Stream uploads to a temp file (no in-memory buffering), like the story media route.
 const upload = multer({
@@ -39,19 +38,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     return res.status(400).json({ error: 'Images and videos only.' });
   }
   try {
-    // Big admin videos go to YouTube (unlisted) — Telegram can't serve back
-    // files over 20 MB through the public Bot API.
-    let rec;
-    if (req.user.role === 'admin' && mime.startsWith('video/') && req.file.size > youtube.thresholdBytes) {
-      if (!youtube.isConnected()) {
-        return res.status(400).json({ error: `Videos over ${Math.round(youtube.thresholdBytes / (1024 * 1024))} MB are uploaded to YouTube — connect your channel in Settings first.` });
-      }
-      const title = req.file.originalname.replace(/\.[^.]+$/, '').slice(0, 100);
-      const videoId = await youtube.uploadVideo(req.file.path, { title, mime });
-      rec = { file_id: youtube.keyFor(videoId), unique_id: null, message_id: null, mime, file_name: req.file.originalname, file_size: req.file.size };
-    } else {
-      rec = await storage.saveFile(req.file.path, req.file.originalname, req.file.mimetype);
-    }
+    const rec = await storage.saveFile(req.file.path, req.file.originalname, req.file.mimetype);
     const img = Gallery.create({
       user_id: req.user.id,
       telegram_file_id: rec.file_id,
@@ -61,7 +48,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       file_name: rec.file_name,
       file_size: rec.file_size,
     });
-    res.json({ id: img.id, url: '/gallery/' + img.id + '/raw', mime: img.mime, youtube_id: youtube.idFromKey(img.telegram_file_id) });
+    res.json({ id: img.id, url: '/gallery/' + img.id + '/raw', mime: img.mime });
   } catch (err) {
     console.error('[gallery upload]', err.message);
     res.status(500).json({ error: 'Upload failed: ' + err.message });
@@ -76,8 +63,6 @@ router.post('/', upload.single('file'), async (req, res) => {
 router.get('/:id/raw', async (req, res) => {
   const img = Gallery.findById(parseInt(req.params.id, 10));
   if (!img || img.user_id !== req.user.id || !img.telegram_file_id) return res.status(404).send('Not found');
-  const ytId = youtube.idFromKey(img.telegram_file_id);
-  if (ytId) return res.redirect(`https://www.youtube.com/watch?v=${ytId}`);
   try {
     await storage.streamTo(img.telegram_file_id, res, { mime: img.mime, fileName: img.file_name, inline: !req.query.download, range: req.headers.range || null });
   } catch (err) {

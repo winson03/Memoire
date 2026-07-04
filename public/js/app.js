@@ -124,11 +124,9 @@ function openLightbox(items, index) {
 
   function render() {
     const it = items[i];
-    mediaEl.innerHTML = it.kind === 'youtube'
-      ? `<iframe class="lightbox-youtube" src="${it.src}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="origin"></iframe>`
-      : it.kind === 'video'
-        ? `<video src="${it.src}" controls autoplay></video>`
-        : `<img src="${it.src}" alt="">`;
+    mediaEl.innerHTML = it.kind === 'video'
+      ? `<video src="${it.src}" controls autoplay></video>`
+      : `<img src="${it.src}" alt="">`;
     capEl.textContent = it.caption || '';
     capEl.style.display = it.caption ? '' : 'none';
     if (multi) countEl.textContent = `${i + 1} / ${items.length}`;
@@ -1223,7 +1221,6 @@ function initMedia() {
   function thumbInner(m) {
     if (m.kind === 'photo') return `<img src="/media/${m.id}" alt="" draggable="false">`;
     if (m.kind === 'video') return `<video src="/media/${m.id}" muted preload="metadata"></video>`;
-    if (m.kind === 'youtube' && m.youtube_id) return `<img src="https://i.ytimg.com/vi/${m.youtube_id}/hqdefault.jpg" alt="" draggable="false">`;
     return `<span class="media-kind">${escapeHtml((m.kind || 'file').toUpperCase())}</span>`;
   }
 
@@ -1423,11 +1420,9 @@ function initGallery() {
     el.innerHTML =
       `<button type="button" class="media-remove" data-del="${img.id}" title="Remove">×</button>` +
       `<a class="media-download" href="${img.url}?download=1" download title="Download">↓</a>` +
-      (img.youtube_id
-        ? `<img src="https://i.ytimg.com/vi/${img.youtube_id}/hqdefault.jpg" alt="" loading="lazy" data-yt="${img.youtube_id}"><div class="media-play">▶</div>`
-        : isVideo
-          ? `<video src="${img.url}" muted preload="metadata"></video><div class="media-play">▶</div>`
-          : `<img src="${img.url}" alt="" loading="lazy">`);
+      (isVideo
+        ? `<video src="${img.url}" muted preload="metadata"></video><div class="media-play">▶</div>`
+        : `<img src="${img.url}" alt="" loading="lazy">`);
     // Newest-first view shows fresh uploads at the top; oldest-first at the bottom.
     grid.insertAdjacentElement(newestFirst ? 'afterbegin' : 'beforeend', el);
     if (empty) empty.hidden = true;
@@ -1478,11 +1473,7 @@ function initGallery() {
     const clicked = e.target.closest('.gallery-tile img, .gallery-tile video');
     if (clicked) {
       const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
-      openLightbox(items.map((x) => (
-        x.dataset.yt
-          ? { src: `https://www.youtube-nocookie.com/embed/${x.dataset.yt}?autoplay=1`, caption: '', kind: 'youtube' }
-          : { src: x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' }
-      )), items.indexOf(clicked));
+      openLightbox(items.map((x) => ({ src: x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })), items.indexOf(clicked));
     }
   });
 }

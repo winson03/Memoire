@@ -9,7 +9,6 @@ const { ensureAuth } = require('../middleware/auth');
 const { Books, Folders, Media, Favourites, Notifications } = require('../lib/queries');
 const { THEME_KEYS } = require('../lib/themes');
 const storage = require('../lib/storage');
-const youtube = require('../lib/youtube');
 const pdf = require('../lib/pdf');
 const archiver = require('archiver');
 
@@ -77,7 +76,6 @@ router.get('/stories/:id/download', async (req, res) => {
   // Images only — zero-padded prefix keeps them in gallery order inside the folder.
   for (let i = 0; i < photos.length; i++) {
     const m = photos[i];
-    if (youtube.idFromKey(m.telegram_file_id)) continue; // hosted on YouTube — no bytes to zip
     try {
       const buf = await storage.fetchBuffer(m.telegram_file_id);
       const base = m.file_name || `image-${i + 1}.jpg`;
@@ -275,10 +273,7 @@ router.post('/stories/:id/media', upload.single('file'), async (req, res) => {
         telegram_message_id: rec.message_id,
         position: Media.nextPosition(book.id),
       });
-      return {
-        id: media.id, kind: media.kind, label: media.label, file_name: media.file_name,
-        youtube_id: youtube.idFromKey(media.telegram_file_id),
-      };
+      return { id: media.id, kind: media.kind, label: media.label, file_name: media.file_name };
     };
 
     const items = [];
@@ -302,26 +297,6 @@ router.post('/stories/:id/media', upload.single('file'), async (req, res) => {
         const rec = await storage.saveFile(req.file.path, req.file.originalname, req.file.mimetype);
         items.push(addMedia(rec, baseLabel));
       }
-    } else if (
-      req.user.role === 'admin' &&
-      (req.file.mimetype || '').startsWith('video/') &&
-      req.file.size > youtube.thresholdBytes
-    ) {
-      // Big admin videos go to YouTube (unlisted) — Telegram can't serve back
-      // files over 20 MB through the public Bot API.
-      if (!youtube.isConnected()) {
-        return res.status(400).json({ error: `Videos over ${Math.round(youtube.thresholdBytes / (1024 * 1024))} MB are uploaded to YouTube — connect your channel in Settings first.` });
-      }
-      const videoId = await youtube.uploadVideo(req.file.path, { title: baseLabel, mime: req.file.mimetype });
-      items.push(addMedia({
-        kind: 'youtube',
-        mime: req.file.mimetype,
-        file_name: req.file.originalname,
-        file_size: req.file.size,
-        file_id: youtube.keyFor(videoId),
-        unique_id: null,
-        message_id: null,
-      }, baseLabel));
     } else {
       const rec = await storage.saveFile(req.file.path, req.file.originalname, req.file.mimetype);
       items.push(addMedia(rec, baseLabel));
@@ -380,8 +355,6 @@ router.post('/stories/:id/cover', upload.single('cover'), async (req, res) => {
 router.get('/media/:id', async (req, res) => {
   const media = Media.findById(parseInt(req.params.id, 10));
   if (!media || !media.telegram_file_id) return res.status(404).send('Not found');
-  const ytId = youtube.idFromKey(media.telegram_file_id);
-  if (ytId) return res.redirect(`https://www.youtube.com/watch?v=${ytId}`);
   try {
     await storage.streamTo(media.telegram_file_id, res, {
       mime: media.mime,

@@ -162,8 +162,6 @@
                         <img src="/media/<%= m.id %>" alt="" draggable="false">
                       <% } else if (m.telegram_file_id && m.kind === 'video') { %>
                         <video src="/media/<%= m.id %>" muted preload="metadata"></video>
-                      <% } else if (m.telegram_file_id && m.kind === 'youtube') { %>
-                        <img src="https://i.ytimg.com/vi/<%= m.telegram_file_id.slice(3) %>/hqdefault.jpg" alt="" draggable="false">
                       <% } else { %>
                         <span class="media-kind"><%= (m.kind || 'file').toUpperCase() %></span>
                       <% } %>

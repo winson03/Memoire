@@ -27,21 +27,6 @@
             </form>
           <% } %>
         </section>
-
-        <section class="settings-section">
-          <div class="flex-between" style="align-items:flex-start;gap:16px;flex-wrap:wrap;">
-            <div>
-              <h3 style="margin-bottom:6px;">YouTube</h3>
-              <p style="margin:0;color:rgba(58,50,42,0.5);font-size:14px;line-height:1.5;max-width:520px;">Videos over 15 MB are uploaded to your YouTube channel as <em>Unlisted</em> and embedded in stories — Telegram can’t stream large files back.</p>
-            </div>
-            <span class="connected-chip <%= youtubeConnected ? '' : 'off' %>"><span class="live"></span><%= youtubeConnected ? 'Connected' : 'Not connected' %></span>
-          </div>
-          <% if (youtubeConfigured) { %>
-            <a href="/settings/youtube/connect" class="btn btn-soft" style="padding:10px 16px;border-radius:10px;font-size:13.5px;display:inline-block;"><%= youtubeConnected ? 'Reconnect YouTube' : 'Connect YouTube' %></a>
-          <% } else { %>
-            <p style="margin:0;color:rgba(58,50,42,0.5);font-size:13.5px;">Set <code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code> to enable this.</p>
-          <% } %>
-        </section>
         <% } %>
 
         <section class="danger-section">
