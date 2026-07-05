@@ -171,14 +171,16 @@ a { color: inherit; text-decoration: none; }
 /* Distinguish novel as an outline button */
 .new-novel-btn { background: rgba(255,255,255,0.6); color: var(--accent); border: 1px solid rgba(194,104,62,0.4); box-shadow: none; }
 .new-novel-btn:hover { background: rgba(194,104,62,0.1); filter: none; }
-.nav { display: flex; flex-direction: column; gap: 3px; }
-.nav-group-label { padding: 16px 12px 5px; font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: rgba(58,50,42,0.35); user-select: none; }
-.nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; font-size: 14.5px; font-weight: 400; color: rgba(58,50,42,0.5); background: transparent; transition: background .2s, color .2s; }
+.nav { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(58,50,42,0.18) transparent; }
+.nav::-webkit-scrollbar { width: 4px; }
+.nav::-webkit-scrollbar-thumb { background: rgba(58,50,42,0.18); border-radius: 4px; }
+.nav-group-label { padding: 13px 12px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: rgba(58,50,42,0.35); user-select: none; flex: none; }
+.nav-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 10px; cursor: pointer; font-size: 14.5px; font-weight: 400; color: rgba(58,50,42,0.5); background: transparent; transition: background .2s, color .2s; flex: none; }
 .nav-item .nav-dot { width: 7px; height: 7px; border-radius: 50%; background: transparent; border: 1.5px solid rgba(58,50,42,0.25); flex: none; }
 .nav-item:hover { background: rgba(255,255,255,0.4); }
 .nav-item.active { font-weight: 600; color: var(--ink); background: rgba(194,104,62,0.12); }
 .nav-item.active .nav-dot { background: linear-gradient(135deg, var(--accent), var(--accent-alt)); border: none; }
-.sidebar-bottom { margin-top: auto; }
+.sidebar-bottom { margin-top: auto; padding-top: 14px; flex: none; }
 .storage-pill { display: flex; align-items: center; gap: 9px; font-size: 12px; color: rgba(58,50,42,0.55); padding: 10px 12px; background: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.7); border-radius: 11px; margin-bottom: 14px; backdrop-filter: blur(8px); }
 .storage-pill .live { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; animation: pulse 2.5s ease-in-out infinite; }
 .storage-pill.off .live { background: rgba(58,50,42,0.4); animation: none; }
