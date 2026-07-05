@@ -18,6 +18,7 @@
                   data-create-dialog
                   data-title="New collection"
                   data-label="Collection name"
+                  data-existing="<%= JSON.stringify(collections.map(function(c){ return c.name; })) %>"
                   data-action="/gallery/collections">+ New collection</button>
           <% if (activeCollection) { %>
             <form action="/gallery/collections/<%= activeCollection.id %>/delete" method="post" style="margin:0;">

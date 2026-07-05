@@ -13,7 +13,7 @@ const THEMES = {
 };
 
 // ── Dialog overlay ──────────────────────────────────────────────────────────
-function openDialog({ title, body, label, value, confirmLabel, danger, onConfirm }) {
+function openDialog({ title, body, label, value, confirmLabel, danger, onConfirm, onCancel }) {
   const backdrop = document.createElement('div');
   backdrop.className = 'dialog-backdrop';
   const isInput = typeof label === 'string';
@@ -34,11 +34,15 @@ function openDialog({ title, body, label, value, confirmLabel, danger, onConfirm
   const input = backdrop.querySelector('input');
   if (input) setTimeout(() => input.focus(), 30);
 
-  function close() { backdrop.remove(); document.removeEventListener('keydown', onKey); }
+  function close(confirmed) {
+    backdrop.remove();
+    document.removeEventListener('keydown', onKey);
+    if (!confirmed && onCancel) onCancel(input ? input.value : undefined);
+  }
   function confirm() {
     const val = input ? input.value.trim() : true;
     if (input && !val) { input.focus(); return; }
-    close();
+    close(true);
     onConfirm(val);
   }
   function onKey(e) {
@@ -46,9 +50,9 @@ function openDialog({ title, body, label, value, confirmLabel, danger, onConfirm
     if (e.key === 'Enter' && input) confirm();
   }
 
-  backdrop.addEventListener('click', close);
+  backdrop.addEventListener('click', () => close());
   card.addEventListener('click', (e) => e.stopPropagation());
-  backdrop.querySelector('.dialog-cancel').addEventListener('click', close);
+  backdrop.querySelector('.dialog-cancel').addEventListener('click', () => close());
   backdrop.querySelector('.dialog-confirm').addEventListener('click', confirm);
   document.addEventListener('keydown', onKey);
 }
@@ -247,16 +251,36 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Create dialogs (new folder / collection).
+  // Create dialogs (new folder / collection). When data-existing lists the
+  // current names, a duplicate asks for confirmation first — declining goes
+  // back to the name editor instead of saving.
   document.querySelectorAll('[data-create-dialog]').forEach((btn) => {
+    let existing = [];
+    try { existing = JSON.parse(btn.dataset.existing || '[]').map((n) => String(n).trim().toLowerCase()); } catch (_) { /* none */ }
+
+    const openEditor = (initial) => openDialog({
+      title: btn.dataset.title,
+      label: btn.dataset.label || 'Name',
+      value: initial || '',
+      confirmLabel: 'Create',
+      onConfirm: (val) => {
+        if (existing.includes(val.trim().toLowerCase())) {
+          openDialog({
+            title: 'Name already exists',
+            body: `You already have “${val}”. Do you want to continue and save another one with the same name?`,
+            confirmLabel: 'Yes, continue',
+            onConfirm: () => postForm(btn.dataset.action, { name: val }),
+            onCancel: () => openEditor(val), // back to editing the name
+          });
+          return;
+        }
+        postForm(btn.dataset.action, { name: val });
+      },
+    });
+
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      openDialog({
-        title: btn.dataset.title,
-        label: btn.dataset.label || 'Name',
-        confirmLabel: 'Create',
-        onConfirm: (val) => postForm(btn.dataset.action, { name: val }),
-      });
+      openEditor();
     });
   });
 

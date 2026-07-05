@@ -72,6 +72,7 @@
                     data-create-dialog
                     data-title="New folder"
                     data-label="Folder name"
+                    data-existing="<%= JSON.stringify(folders.map(function(f){ return f.name; })) %>"
                     data-action="/folders<%= selectedCollection ? ('?collection=' + selectedCollection.id) : '' %>">+ New folder</button>
           </div>
         </div>
