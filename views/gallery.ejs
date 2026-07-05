@@ -54,12 +54,7 @@
               <button type="button" class="media-remove" data-del="<%= img.id %>" title="Remove">×</button>
               <a class="media-download" href="/gallery/<%= img.id %>/raw?download=1" download title="Download">↓</a>
               <% if (collections.length) { %>
-                <select class="tile-collection" data-move="<%= img.id %>" title="Move to collection">
-                  <option value="" <%= !img.collection_id ? 'selected' : '' %>>No collection</option>
-                  <% collections.forEach(function(c){ %>
-                    <option value="<%= c.id %>" <%= img.collection_id === c.id ? 'selected' : '' %>><%= c.name %></option>
-                  <% }) %>
-                </select>
+                <button type="button" class="tile-collect" data-collect="<%= img.id %>" data-current="<%= img.collection_id || '' %>" title="Move to collection">⇄</button>
               <% } %>
               <% if ((img.mime || '').startsWith('video/')) { %>
                 <video src="/gallery/<%= img.id %>/raw" muted preload="metadata"></video>

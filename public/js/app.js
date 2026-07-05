@@ -1415,11 +1415,43 @@ function initGallery() {
     progress.textContent = `Uploading ${done}/${total}${eta ? ` · ${eta.text()}` : ''}…`;
   }
 
-  function collectionSelect(imgId, selectedId) {
+  function collectButton(imgId, currentId) {
     if (!collections.length) return '';
-    const opts = ['<option value="">No collection</option>']
-      .concat(collections.map((c) => `<option value="${c.id}" ${String(c.id) === String(selectedId || '') ? 'selected' : ''}>${escapeHtml(c.name)}</option>`));
-    return `<select class="tile-collection" data-move="${imgId}" title="Move to collection">${opts.join('')}</select>`;
+    return `<button type="button" class="tile-collect" data-collect="${imgId}" data-current="${currentId || ''}" title="Move to collection">⇄</button>`;
+  }
+
+  // Tap-friendly chooser dialog for moving a tile into a collection.
+  function openCollectionChooser(imgId, currentId, onMoved) {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'dialog-backdrop';
+    const opts = [{ id: '', name: 'No collection' }].concat(collections);
+    backdrop.innerHTML = `
+      <div class="dialog-card" role="dialog" aria-modal="true">
+        <h3>Move to collection</h3>
+        <div class="chooser">
+          ${opts.map((c) => {
+            const cur = String(c.id) === String(currentId || '');
+            return `<button type="button" class="chooser-opt ${cur ? 'current' : ''}" data-id="${c.id}">${escapeHtml(c.name)}${cur ? ' ✓' : ''}</button>`;
+          }).join('')}
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="dialog-cancel">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(backdrop);
+    const close = () => backdrop.remove();
+    backdrop.addEventListener('click', close);
+    backdrop.querySelector('.dialog-card').addEventListener('click', (e) => e.stopPropagation());
+    backdrop.querySelector('.dialog-cancel').addEventListener('click', close);
+    backdrop.querySelectorAll('.chooser-opt').forEach((b) => b.addEventListener('click', async () => {
+      await fetch('/gallery/' + imgId + '/collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ collection_id: b.dataset.id }),
+      });
+      close();
+      onMoved(b.dataset.id);
+    }));
   }
 
   function addTile(img) {
@@ -1430,7 +1462,7 @@ function initGallery() {
     el.innerHTML =
       `<button type="button" class="media-remove" data-del="${img.id}" title="Remove">×</button>` +
       `<a class="media-download" href="${img.url}?download=1" download title="Download">↓</a>` +
-      collectionSelect(img.id, activeCollection) +
+      collectButton(img.id, activeCollection) +
       (isVideo
         ? `<video src="${img.url}" muted preload="metadata"></video><div class="media-play">▶</div>`
         : `<img src="${img.url}" alt="" loading="lazy">`);
@@ -1472,24 +1504,22 @@ function initGallery() {
     });
   }
 
-  // Move a tile to another collection; drop it from view when it leaves the
-  // currently filtered collection.
-  grid.addEventListener('change', async (e) => {
-    const sel = e.target.closest('select[data-move]');
-    if (!sel) return;
-    await fetch('/gallery/' + sel.dataset.move + '/collection', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ collection_id: sel.value }),
-    });
-    if (activeCollection && sel.value !== activeCollection) {
-      sel.closest('.gallery-tile').remove();
-      if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
-    }
-  });
-
   grid.addEventListener('click', async (e) => {
-    if (e.target.closest('select[data-move]')) return; // don't open the lightbox
+    // "⇄" → chooser dialog; drop the tile from view when it leaves the
+    // currently filtered collection.
+    const collect = e.target.closest('[data-collect]');
+    if (collect) {
+      e.stopPropagation();
+      const tile = collect.closest('.gallery-tile');
+      openCollectionChooser(collect.dataset.collect, collect.dataset.current, (newId) => {
+        collect.dataset.current = newId;
+        if (activeCollection && newId !== activeCollection) {
+          tile.remove();
+          if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
+        }
+      });
+      return;
+    }
     const del = e.target.closest('[data-del]');
     if (del) {
       e.stopPropagation();
