@@ -8,6 +8,7 @@ const { Users, Books, Folders, Collections, Favourites, Notifications, Media } =
 const { greeting, firstName, storageStats } = require('../lib/view-helpers');
 const { statusLabel, readersTxt } = require('../lib/themes');
 const storage = require('../lib/storage');
+const drive = require('../lib/drive');
 const bcrypt = require('bcryptjs');
 
 const avatarUpload = multer({
@@ -481,8 +482,87 @@ router.post('/admin/users/:id/delete', ensureAdmin, (req, res) => {
 });
 
 // ── Settings ─────────────────────────────────────────────────────────────────
-router.get('/settings', (req, res) => {
-  res.render('settings', { storage: storageStats() });
+router.get('/settings', async (req, res) => {
+  // Live-probe Google Drive for the admin status pill (skipped for regular
+  // users — the Storage section is admin-only anyway).
+  let driveStatus = {
+    configured: drive.isConfigured(),
+    connected: false,
+    user: null,
+    reason: null,
+    mode: drive.authMode(),
+    oauthAvailable: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    token: null,
+  };
+  if (req.user.role === 'admin') {
+    if (driveStatus.configured) {
+      const check = await drive.checkConnection();
+      driveStatus.connected = check.connected;
+      driveStatus.user = check.user || null;
+      driveStatus.reason = check.reason || null;
+    }
+    driveStatus.token = drive.storedToken();
+  }
+  res.render('settings', {
+    storage: storageStats(),
+    driveStatus,
+    driveMinMb: Number(process.env.GDRIVE_VIDEO_MIN_MB || 15),
+  });
+});
+
+// ── Settings: connect Google Drive (admin) ────────────────────────────────────
+// Reuses the app's Google OAuth client with the narrow drive.file scope; the
+// refresh token is stored in app_settings. The redirect URI
+// (<APP_URL>/settings/drive/callback) must be registered on the OAuth client
+// in the Google Cloud console.
+function driveRedirectUri(req) {
+  const base = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+  return `${base}/settings/drive/callback`;
+}
+
+router.get('/settings/drive/connect', ensureAdmin, (req, res) => {
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    req.flash('error', 'Google OAuth is not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).');
+    return res.redirect('/settings');
+  }
+  const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  u.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID);
+  u.searchParams.set('redirect_uri', driveRedirectUri(req));
+  u.searchParams.set('response_type', 'code');
+  u.searchParams.set('scope', drive.oauthScope);
+  u.searchParams.set('access_type', 'offline'); // ask for a refresh token
+  u.searchParams.set('prompt', 'consent');      // re-issue one even if already granted
+  res.redirect(u.toString());
+});
+
+router.get('/settings/drive/callback', ensureAdmin, async (req, res) => {
+  try {
+    if (req.query.error) throw new Error(req.query.error);
+    if (!req.query.code) throw new Error('no authorization code returned');
+    const axios = require('axios');
+    const { data } = await axios.post('https://oauth2.googleapis.com/token', new URLSearchParams({
+      code: req.query.code,
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: driveRedirectUri(req),
+      grant_type: 'authorization_code',
+    }), { timeout: 30000 });
+    if (!data.refresh_token) {
+      throw new Error('Google did not return a refresh token — remove the app at myaccount.google.com/permissions and connect again.');
+    }
+    drive.saveRefreshToken(data.refresh_token);
+    req.flash('info', 'Google Drive connected — large videos will be stored there.');
+  } catch (err) {
+    const detail = err.response && err.response.data && (err.response.data.error_description || err.response.data.error);
+    req.flash('error', 'Google Drive connect failed: ' + (detail || err.message));
+  }
+  res.redirect('/settings');
+});
+
+router.post('/settings/drive/disconnect', ensureAdmin, (req, res) => {
+  drive.disconnect();
+  req.flash('info', 'Google Drive disconnected. Already-uploaded videos stay in Drive but can no longer be played.');
+  res.redirect('/settings');
 });
 
 router.post('/settings/account', (req, res) => {

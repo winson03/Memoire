@@ -21,6 +21,43 @@
             <div class="mini-stat"><div class="num"><%= storage.files %></div><div class="lbl">Files</div></div>
             <div class="mini-stat"><div class="num"><%= storage.used %></div><div class="lbl">Used</div></div>
           </div>
+          <div class="flex-between" style="align-items:flex-start;gap:16px;flex-wrap:wrap;margin-top:18px;padding-top:18px;border-top:1px solid rgba(58,50,42,0.08);">
+            <div>
+              <h4 style="margin:0 0 6px;font-size:15px;">Google Drive</h4>
+              <p style="margin:0;color:rgba(58,50,42,0.5);font-size:14px;line-height:1.5;max-width:520px;">
+                Videos over <%= driveMinMb %> MB are stored in Google Drive.
+                <% if (driveStatus.connected && driveStatus.user) { %>
+                  Connected as <strong style="font-weight:600;"><%= driveStatus.user %></strong> — they land in a “Mémoire videos” folder in that account’s Drive.
+                <% } else if (driveStatus.configured && driveStatus.reason) { %>
+                  <%= driveStatus.reason %>
+                <% } else if (driveStatus.oauthAvailable) { %>
+                  Connect a Google account to enable this.
+                <% } else { %>
+                  Set up Google OAuth (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) first.
+                <% } %>
+              </p>
+            </div>
+            <span class="connected-chip <%= driveStatus.connected ? '' : 'off' %>"><span class="live"></span><%= driveStatus.connected ? 'Connected' : (driveStatus.configured ? 'Offline' : 'Not set up') %></span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+            <% if (driveStatus.mode !== 'service-account') { %>
+              <% if (driveStatus.oauthAvailable) { %>
+                <a href="/settings/drive/connect" class="btn btn-soft" style="padding:10px 16px;border-radius:10px;font-size:13.5px;"><%= driveStatus.connected ? 'Reconnect' : 'Connect Google Drive' %></a>
+              <% } %>
+              <% if (driveStatus.token) { %>
+                <form action="/settings/drive/disconnect" method="post" style="margin:0;">
+                  <button type="submit" class="btn btn-soft" style="padding:10px 16px;border-radius:10px;font-size:13.5px;">Disconnect</button>
+                </form>
+              <% } %>
+            <% } %>
+          </div>
+          <% if (driveStatus.token) { %>
+            <details style="margin-top:12px;">
+              <summary style="cursor:pointer;color:rgba(58,50,42,0.5);font-size:13px;">Deploying on a host with an ephemeral disk (e.g. Render)?</summary>
+              <p style="margin:8px 0 6px;color:rgba(58,50,42,0.5);font-size:13px;line-height:1.5;max-width:560px;">Set this env var on the server so the connection survives redeploys:</p>
+              <code style="display:block;padding:10px 12px;border-radius:10px;background:rgba(58,50,42,0.06);font-size:12px;word-break:break-all;user-select:all;">GDRIVE_OAUTH_REFRESH_TOKEN=<%= driveStatus.token %></code>
+            </details>
+          <% } %>
           <% if (currentUser.role === 'admin') { %>
             <form action="/settings/reconnect" method="post" style="margin:0;">
               <button type="submit" class="btn btn-soft" style="padding:10px 16px;border-radius:10px;font-size:13.5px;">Reconnect storage</button>

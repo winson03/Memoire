@@ -64,6 +64,24 @@ template). Key groups:
   `PORT=8081`; **no** `TELEGRAM_LOCAL` — the app downloads over HTTP), then point the main
   service's `TELEGRAM_BOT_API_URL` at `https://<that-service>.onrender.com/bot` and set
   `TELEGRAM_MAX_FILE_SIZE=2000`. Leave `TELEGRAM_BOT_API_LOCAL` unset/false on Render.
+- **Google Drive (large videos)** — videos bigger than `GDRIVE_VIDEO_MIN_MB` (default 15 MB)
+  are stored on Google Drive instead of Telegram, because the public Bot API refuses to serve
+  back files over 20 MB. Setup (uses the same Google OAuth client as sign-in, with the narrow
+  `drive.file` scope):
+  1. In the [Google Cloud console](https://console.cloud.google.com) → APIs & Services →
+     enable the **Google Drive API**, and on the OAuth client add
+     `<APP_URL>/settings/drive/callback` as an **authorized redirect URI** (do this for both
+     `http://localhost:8000/...` and the live URL).
+  2. Make sure the OAuth consent screen is **In production** (a Testing-status refresh token
+     expires after 7 days).
+  3. As an admin, open **Settings → Storage → Connect Google Drive** and approve. Videos then
+     land in a "Mémoire videos" folder in that account's Drive, under its normal quota.
+  4. The token is stored in the SQLite DB. On a host with an ephemeral disk (Render), also
+     copy the token shown on the Settings page into a `GDRIVE_OAUTH_REFRESH_TOKEN` env var.
+  If not connected, all media keeps going to Telegram as before. (Service-account mode —
+  `GDRIVE_CREDENTIALS_FILE` / `GDRIVE_SERVICE_ACCOUNT_EMAIL` + `GDRIVE_PRIVATE_KEY` with
+  `GDRIVE_FOLDER_ID` — only works with a Google Workspace **shared drive**: Google removed
+  service accounts' own storage quota, so on a personal Gmail they cannot upload.)
 - **Google OAuth** — `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
   (`http://localhost:8000/auth/google/callback`). The same redirect URI must be registered in
   the Google Cloud console. If unset, the Google button is disabled and guest mode still works.
