@@ -5,7 +5,8 @@
   <main class="main">
     <%- include('partials/topbar', { pageTitle: isNovel ? 'Novel editor' : 'Story editor', searchAction: '/dashboard' }) %>
     <div class="content">
-      <form class="page" method="post" action="/stories/<%= book.id %>" id="editorForm">
+      <form class="page" method="post" action="/stories/<%= book.id %>" id="editorForm"
+            data-existing-titles="<%= JSON.stringify(otherTitles || []) %>">
         <div class="editor-top">
           <a href="/reader/<%= book.id %>" class="btn-ghost">← Discard &amp; close</a>
           <div style="display:flex;gap:12px;align-items:center;">

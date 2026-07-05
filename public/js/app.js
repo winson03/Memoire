@@ -430,6 +430,31 @@ document.addEventListener('DOMContentLoaded', () => {
   if (titleInput && coverTitle) {
     titleInput.addEventListener('input', () => { coverTitle.textContent = titleInput.value || 'Untitled'; });
   }
+
+  // Duplicate story titles ask for confirmation before saving; declining
+  // returns to the editor with the title focused for editing.
+  const editorForm = document.getElementById('editorForm');
+  if (editorForm && titleInput) {
+    let existingTitles = [];
+    try { existingTitles = JSON.parse(editorForm.dataset.existingTitles || '[]').map((t) => String(t).trim().toLowerCase()); } catch (_) { /* none */ }
+    let confirmedDuplicate = false;
+    editorForm.addEventListener('submit', (e) => {
+      if (confirmedDuplicate) return;
+      const val = (titleInput.value || '').trim();
+      if (!val || !existingTitles.includes(val.toLowerCase())) return;
+      e.preventDefault();
+      openDialog({
+        title: 'Story name already exists',
+        body: `You already have a story named “${val}”. Do you want to continue and save it anyway?`,
+        confirmLabel: 'Yes, continue',
+        onConfirm: () => {
+          confirmedDuplicate = true;
+          if (editorForm.requestSubmit) editorForm.requestSubmit(); else editorForm.submit();
+        },
+        onCancel: () => titleInput.focus(),
+      });
+    });
+  }
   const seriesInput = document.getElementById('seriesInput');
   const folderSelect = document.getElementById('folderSelect');
   const coverSeries = document.getElementById('coverSeries');

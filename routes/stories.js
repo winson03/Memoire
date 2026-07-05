@@ -147,7 +147,9 @@ router.get('/editor', (req, res) => {
 
   const photos = Media.listForBook(book.id);
   const folders = Folders.listForUser(u.id);
-  res.render('editor', { book, photos, folders, statusDefs: STATUS_DEFS, themeKeys: THEME_KEYS, blocks: parseBlocks(book.content) });
+  // The user's other story titles — the editor confirms before saving a duplicate.
+  const otherTitles = Books.listByUser(u.id).filter((b) => b.id !== book.id).map((b) => b.title);
+  res.render('editor', { book, photos, folders, otherTitles, statusDefs: STATUS_DEFS, themeKeys: THEME_KEYS, blocks: parseBlocks(book.content) });
 });
 
 // ── Bulk folder import: one folder → one private story ───────────────────────
