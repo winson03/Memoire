@@ -110,6 +110,10 @@ app.locals.formatDob = viewHelpers.formatDob;
 // Per-request locals.
 app.use((req, res, next) => {
   res.locals.storageConnected = storage.isConfigured();
+  // Browser-direct Drive uploads for big videos (checked per request — the
+  // admin can connect/disconnect Drive at runtime via Settings).
+  res.locals.driveDirect = storage.driveEnabled();
+  res.locals.driveMinBytes = storage.driveVideoMinBytes;
   res.locals.flash = [
     ...req.flash('error').map((m) => ({ type: 'error', message: m })),
     ...req.flash('info').map((m) => ({ type: 'info', message: m })),

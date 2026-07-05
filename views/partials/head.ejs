@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/styles.css?v=<%= typeof assetVer === 'function' ? assetVer('css/styles.css') : '' %>">
 </head>
-<body>
+<body data-drive-direct="<%= typeof driveDirect !== 'undefined' && driveDirect ? '1' : '0' %>" data-drive-min="<%= typeof driveMinBytes !== 'undefined' ? driveMinBytes : '' %>">
 <div class="page-loader" id="pageLoader"><div class="page-loader-spin"></div></div>
 <div class="orbs">
   <div class="orb orb-a"></div>

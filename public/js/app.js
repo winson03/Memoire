@@ -681,6 +681,50 @@ function makeUploadEta(files) {
   };
 }
 
+// ── Browser-direct Google Drive uploads (big videos) ─────────────────────────
+// Large videos would exceed the host's request-size/memory limits if relayed
+// through the server, so they go straight to Google: the server mints a
+// resumable session URL (bound to this origin for CORS), the browser PUTs the
+// bytes to Google with progress, then registers the file id with the app.
+function wantsDriveDirect(file) {
+  const b = document.body.dataset;
+  if (b.driveDirect !== '1') return false;
+  const min = parseInt(b.driveMin, 10) || 15 * 1024 * 1024;
+  return (file.type || '').startsWith('video/') && file.size > min;
+}
+
+async function uploadToDrive(file, onProgress) {
+  const sess = await fetch('/drive/upload-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_name: file.name, mime: file.type, size: file.size }),
+  });
+  if (!sess.ok) {
+    let msg = 'Could not start the Drive upload';
+    try { msg = (await sess.json()).error || msg; } catch (_) { /* non-JSON */ }
+    throw new Error(msg);
+  }
+  const { url } = await sess.json();
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    if (xhr.upload && onProgress) {
+      xhr.upload.addEventListener('progress', (e) => { if (e.lengthComputable) onProgress(e.loaded); });
+    }
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); } // { id, size }
+        catch (_) { reject(new Error('Unexpected response from Google Drive')); }
+      } else {
+        reject(new Error('Drive upload failed (HTTP ' + xhr.status + ')'));
+      }
+    });
+    xhr.addEventListener('error', () => reject(new Error('Network error during the Drive upload')));
+    xhr.send(file);
+  });
+}
+
 // POST a FormData like fetch(), but report upload progress along the way.
 // Resolves to a fetch-Response-alike ({ ok, status, json }).
 function postFormWithProgress(url, formData, onProgress) {
@@ -1217,12 +1261,28 @@ function initMedia() {
   async function uploadFile(file, opts = {}, onProgress) {
     const tile = makeUploadingTile(file);
     grid.insertBefore(tile, addTile);
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('label', file.name.replace(/\.[^.]+$/, ''));
-    if (opts.setTitle) fd.append('set_title', opts.setTitle);
     try {
-      const res = await postFormWithProgress(`/stories/${bookId}/media`, fd, onProgress);
+      let res;
+      if (wantsDriveDirect(file)) {
+        const df = await uploadToDrive(file, onProgress);
+        res = await fetch(`/stories/${bookId}/media/register-drive`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            drive_id: df.id,
+            file_name: file.name,
+            mime: file.type,
+            label: file.name.replace(/\.[^.]+$/, ''),
+            set_title: opts.setTitle || '',
+          }),
+        });
+      } else {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('label', file.name.replace(/\.[^.]+$/, ''));
+        if (opts.setTitle) fd.append('set_title', opts.setTitle);
+        res = await postFormWithProgress(`/stories/${bookId}/media`, fd, onProgress);
+      }
       if (!res.ok) {
         let msg = 'Upload failed';
         try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (_) { /* non-JSON */ }
@@ -1533,11 +1593,21 @@ function initGallery() {
         const worker = async () => {
           for (let file = queue.shift(); file; file = queue.shift()) {
             showProgress(Math.min(done + 1, files.length), files.length, eta);
-            const fd = new FormData();
-            fd.append('file', file);
-            if (activeCollection) fd.append('collection_id', activeCollection);
             try {
-              const res = await postFormWithProgress('/gallery', fd, (sent) => eta.progress(file, sent));
+              let res;
+              if (wantsDriveDirect(file)) {
+                const df = await uploadToDrive(file, (sent) => eta.progress(file, sent));
+                res = await fetch('/gallery/register-drive', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ drive_id: df.id, file_name: file.name, mime: file.type, collection_id: activeCollection }),
+                });
+              } else {
+                const fd = new FormData();
+                fd.append('file', file);
+                if (activeCollection) fd.append('collection_id', activeCollection);
+                res = await postFormWithProgress('/gallery', fd, (sent) => eta.progress(file, sent));
+              }
               if (res.ok) addTile(await res.json());
             } catch (_) { /* skip failed file */ }
             eta.fileDone(file);

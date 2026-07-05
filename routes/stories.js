@@ -245,6 +245,45 @@ router.post('/stories/:id/favourite-ajax', (req, res) => {
   res.json({ faved });
 });
 
+// ── Media: register a browser-direct Google Drive upload ─────────────────────
+// Big videos go browser → Drive (see POST /drive/upload-session); this stores
+// the resulting Drive file as a media row after verifying it exists.
+router.post('/stories/:id/media/register-drive', async (req, res) => {
+  const book = Books.findById(parseInt(req.params.id, 10));
+  if (!ownerOnly(book, req)) return res.status(403).json({ error: 'forbidden' });
+  const driveId = String((req.body && req.body.drive_id) || '').trim();
+  if (!driveId) return res.status(400).json({ error: 'Missing drive_id.' });
+  try {
+    const drive = require('../lib/drive');
+    const meta = await drive.fileMeta(driveId);
+    const mime = req.body.mime || meta.mimeType || '';
+    const fileName = req.body.file_name || meta.name || null;
+
+    const setTitle = (req.body.set_title || '').trim().slice(0, 120);
+    if (setTitle && /^untitled (story|novel)$/i.test((book.title || '').trim())) {
+      Books.setTitle(book.id, setTitle);
+    }
+
+    const media = Media.create({
+      book_id: book.id,
+      label: (req.body.label || (fileName || 'Video').replace(/\.[^.]+$/, '')).slice(0, 120),
+      kind: mime.startsWith('video/') ? 'video' : 'document',
+      mime,
+      file_name: fileName,
+      file_size: Number(meta.size) || null,
+      telegram_file_id: storage.driveKey(meta.id),
+      telegram_unique_id: meta.id,
+      telegram_message_id: null,
+      position: Media.nextPosition(book.id),
+    });
+    Books.touch(book.id);
+    res.json({ items: [{ id: media.id, kind: media.kind, label: media.label, file_name: media.file_name }] });
+  } catch (err) {
+    console.error('[media register-drive]', err.message);
+    res.status(502).json({ error: 'Could not register the upload: ' + err.message });
+  }
+});
+
 // ── Media: upload to Telegram ─────────────────────────────────────────────────
 router.post('/stories/:id/media', upload.single('file'), async (req, res) => {
   const book = Books.findById(parseInt(req.params.id, 10));

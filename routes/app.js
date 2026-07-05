@@ -481,6 +481,30 @@ router.post('/admin/users/:id/delete', ensureAdmin, (req, res) => {
   res.redirect('/admin/users');
 });
 
+// ── Google Drive: mint a browser-direct resumable upload session ──────────────
+// Big videos upload straight from the browser to Google (the session URL is
+// bound to our origin for CORS), bypassing this server's body-size and memory
+// limits. The client then registers the finished file via the register-drive
+// endpoints, which verify the file against the Drive API.
+router.post('/drive/upload-session', async (req, res) => {
+  if (!drive.isConfigured()) return res.status(400).json({ error: 'Google Drive is not connected.' });
+  const size = parseInt(req.body && req.body.size, 10);
+  if (!size || size <= 0) return res.status(400).json({ error: 'Missing file size.' });
+  try {
+    const origin = req.get('Origin') || `${req.protocol}://${req.get('host')}`;
+    const url = await drive.createUploadSession({
+      fileName: String((req.body.file_name || 'upload')).slice(0, 200),
+      mime: String(req.body.mime || 'application/octet-stream'),
+      size,
+      origin,
+    });
+    res.json({ url });
+  } catch (err) {
+    console.error('[drive session]', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // ── Settings ─────────────────────────────────────────────────────────────────
 router.get('/settings', async (req, res) => {
   // Live-probe Google Drive for the admin status pill (skipped for regular

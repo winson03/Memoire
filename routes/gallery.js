@@ -103,6 +103,37 @@ router.post('/', upload.single('file'), async (req, res) => {
   }
 });
 
+// Register a video the browser uploaded straight to Google Drive (big files
+// bypass this server — see POST /drive/upload-session). Verifies the file
+// really exists in Drive before creating the row.
+router.post('/register-drive', async (req, res) => {
+  const driveId = String((req.body && req.body.drive_id) || '').trim();
+  if (!driveId) return res.status(400).json({ error: 'Missing drive_id.' });
+  try {
+    const drive = require('../lib/drive');
+    const meta = await drive.fileMeta(driveId);
+    const mime = req.body.mime || meta.mimeType || '';
+    if (!mime.startsWith('image/') && !mime.startsWith('video/')) {
+      return res.status(400).json({ error: 'Images and videos only.' });
+    }
+    const coll = ownCollection(req, req.body.collection_id);
+    const img = Gallery.create({
+      user_id: req.user.id,
+      telegram_file_id: storage.driveKey(meta.id),
+      telegram_unique_id: meta.id,
+      telegram_message_id: null,
+      mime,
+      file_name: req.body.file_name || meta.name || null,
+      file_size: Number(meta.size) || null,
+      collection_id: coll ? coll.id : null,
+    });
+    res.json({ id: img.id, url: '/gallery/' + img.id + '/raw', mime: img.mime });
+  } catch (err) {
+    console.error('[gallery register-drive]', err.message);
+    res.status(502).json({ error: 'Could not register the upload: ' + err.message });
+  }
+});
+
 // Stream an image's bytes (owner only — the gallery is private).
 router.get('/:id/raw', async (req, res) => {
   const img = Gallery.findById(parseInt(req.params.id, 10));
