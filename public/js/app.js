@@ -1400,6 +1400,9 @@ function initGallery() {
   const empty = document.getElementById('galleryEmpty');
   const progress = document.getElementById('galleryProgress');
   const newestFirst = grid.dataset.order !== 'oldest';
+  const activeCollection = grid.dataset.collection || '';
+  let collections = [];
+  try { collections = JSON.parse(grid.dataset.collections || '[]'); } catch (_) { /* none */ }
 
   initGalleryZoom(grid);
 
@@ -1412,6 +1415,13 @@ function initGallery() {
     progress.textContent = `Uploading ${done}/${total}${eta ? ` · ${eta.text()}` : ''}…`;
   }
 
+  function collectionSelect(imgId, selectedId) {
+    if (!collections.length) return '';
+    const opts = ['<option value="">No collection</option>']
+      .concat(collections.map((c) => `<option value="${c.id}" ${String(c.id) === String(selectedId || '') ? 'selected' : ''}>${escapeHtml(c.name)}</option>`));
+    return `<select class="tile-collection" data-move="${imgId}" title="Move to collection">${opts.join('')}</select>`;
+  }
+
   function addTile(img) {
     const el = document.createElement('div');
     el.className = 'gallery-tile';
@@ -1420,6 +1430,7 @@ function initGallery() {
     el.innerHTML =
       `<button type="button" class="media-remove" data-del="${img.id}" title="Remove">×</button>` +
       `<a class="media-download" href="${img.url}?download=1" download title="Download">↓</a>` +
+      collectionSelect(img.id, activeCollection) +
       (isVideo
         ? `<video src="${img.url}" muted preload="metadata"></video><div class="media-play">▶</div>`
         : `<img src="${img.url}" alt="" loading="lazy">`);
@@ -1443,6 +1454,7 @@ function initGallery() {
             showProgress(Math.min(done + 1, files.length), files.length, eta);
             const fd = new FormData();
             fd.append('file', file);
+            if (activeCollection) fd.append('collection_id', activeCollection);
             try {
               const res = await postFormWithProgress('/gallery', fd, (sent) => eta.progress(file, sent));
               if (res.ok) addTile(await res.json());
@@ -1460,7 +1472,24 @@ function initGallery() {
     });
   }
 
+  // Move a tile to another collection; drop it from view when it leaves the
+  // currently filtered collection.
+  grid.addEventListener('change', async (e) => {
+    const sel = e.target.closest('select[data-move]');
+    if (!sel) return;
+    await fetch('/gallery/' + sel.dataset.move + '/collection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ collection_id: sel.value }),
+    });
+    if (activeCollection && sel.value !== activeCollection) {
+      sel.closest('.gallery-tile').remove();
+      if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
+    }
+  });
+
   grid.addEventListener('click', async (e) => {
+    if (e.target.closest('select[data-move]')) return; // don't open the lightbox
     const del = e.target.closest('[data-del]');
     if (del) {
       e.stopPropagation();

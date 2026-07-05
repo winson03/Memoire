@@ -85,15 +85,7 @@
                     <div class="folder-name"><%= f.name %></div>
                     <div class="folder-count"><%= f.count %> <%= f.count === 1 ? 'story' : 'stories' %></div>
                   </div>
-                  <div style="display:flex;align-items:center;gap:8px;">
-                    <form action="/folders/<%= f.id %>/delete" method="post" style="margin:0;">
-                      <button type="submit" class="btn-delete"
-                              data-confirm
-                              data-title="Delete folder?"
-                              data-body="Deleting “<%= f.name %>” permanently removes its <%= f.count %> stories. This can’t be undone.">Delete</button>
-                    </form>
-                    <span class="arrow">→</span>
-                  </div>
+                  <span class="arrow">→</span>
                 </div>
                 <div class="folder-thumbs">
                   <% f.covers.forEach(function(b){ %>
@@ -130,7 +122,15 @@
               <a href="/folders">Folders</a><span>/</span>
               <span class="here"><%= openFolder.name %></span>
             </div>
-            <a href="/editor?folder=<%= openFolder.id %>" class="btn btn-soft" style="padding:9px 14px;border-radius:10px;font-size:13px;">+ New story here</a>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <form action="/folders/<%= openFolder.id %>/delete" method="post" style="margin:0;">
+                <button type="submit" class="btn-delete"
+                        data-confirm
+                        data-title="Delete folder?"
+                        data-body="Deleting “<%= openFolder.name %>” permanently removes all of its stories. This can’t be undone.">Delete folder</button>
+              </form>
+              <a href="/editor?folder=<%= openFolder.id %>" class="btn btn-soft" style="padding:9px 14px;border-radius:10px;font-size:13px;">+ New story here</a>
+            </div>
           </div>
           <% if (folderBooks.length) { %>
             <div class="cover-grid sm">
