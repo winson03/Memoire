@@ -1,27 +1,35 @@
 <%
   var p = path || '';
   function isActive(key) {
-    if (key === 'dashboard') return p.startsWith('/dashboard') || p.startsWith('/library') || p.startsWith('/reader') || p.startsWith('/editor');
+    if (key === 'dashboard') return p.startsWith('/dashboard') || p.startsWith('/reader') || p.startsWith('/editor');
     if (key === 'admin') return p === '/admin'; // not /admin/users
     return p.startsWith('/' + key);
   }
   var u = currentUser || { name: 'Guest', initials: 'G', role: 'storyteller' };
-  var navItems = [
-    { key: 'dashboard',  label: 'Dashboard',              href: '/dashboard' },
-    { key: 'discover',   label: 'Discover',               href: '/discover' },
-    { key: 'folders',    label: 'Folders',                href: '/folders' },
-    { key: 'gallery',    label: 'Gallery',                href: '/gallery' },
-    { key: 'favourites', label: 'Favourites',             href: '/favourites' },
-    { key: 'reports',    label: 'Reports',                href: '/reports' },
+  var navGroups = [
+    { label: null, items: [
+      { key: 'dashboard',  label: 'Dashboard',    href: '/dashboard' },
+      { key: 'library',    label: 'Your library', href: '/library' },
+      { key: 'discover',   label: 'Discover',     href: '/discover' },
+    ] },
+    { label: 'Organise', items: [
+      { key: 'folders',    label: 'Folders',      href: '/folders' },
+      { key: 'gallery',    label: 'Gallery',      href: '/gallery' },
+      { key: 'favourites', label: 'Favourites',   href: '/favourites' },
+    ] },
+    { label: 'Account', items: [
+      { key: 'reports',    label: 'Reports',      href: '/reports' },
+      { key: 'profile',    label: 'Profile',      href: '/profile' },
+      { key: 'settings',   label: 'Settings',     href: '/settings' },
+    ] },
   ];
   // Admin links are only meaningful for admins — don't show dead links to everyone.
   if (u.role === 'admin') {
-    navItems.push({ key: 'admin', label: 'Overview', href: '/admin' });
-    navItems.push({ key: 'admin/users', label: 'Users', href: '/admin/users' });
+    navGroups.push({ label: 'Admin', items: [
+      { key: 'admin',       label: 'Overview', href: '/admin' },
+      { key: 'admin/users', label: 'Users',    href: '/admin/users' },
+    ] });
   }
-  // Profile + Settings always sit at the bottom.
-  navItems.push({ key: 'profile',  label: 'Profile',  href: '/profile' });
-  navItems.push({ key: 'settings', label: 'Settings', href: '/settings' });
   var roleText = u.role === 'admin' ? 'Admin' : 'Storyteller';
 %>
 <aside class="sidebar" id="sidebar">
@@ -34,10 +42,13 @@
     <a href="/editor?type=novel" class="new-story-btn new-novel-btn"><span>+</span> New novel</a>
   </div>
   <nav class="nav">
-    <% navItems.forEach(function(n){ %>
-      <a href="<%= n.href %>" class="nav-item <%= isActive(n.key) ? 'active' : '' %>">
-        <span class="nav-dot"></span><%= n.label %>
-      </a>
+    <% navGroups.forEach(function(g){ %>
+      <% if (g.label) { %><div class="nav-group-label"><%= g.label %></div><% } %>
+      <% g.items.forEach(function(n){ %>
+        <a href="<%= n.href %>" class="nav-item <%= isActive(n.key) ? 'active' : '' %>">
+          <span class="nav-dot"></span><%= n.label %>
+        </a>
+      <% }) %>
     <% }) %>
   </nav>
   <div class="sidebar-bottom">

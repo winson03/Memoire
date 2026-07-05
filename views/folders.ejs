@@ -53,7 +53,8 @@
         <% } %>
         <% } /* end collections feature disabled */ %>
 
-        <!-- ── FOLDERS (group stories) ──────────────────────────────────── -->
+        <!-- ── FOLDERS (group stories) — hidden while a folder is open ──── -->
+        <% if (!openFolder) { %>
         <div class="flex-between" style="margin:42px 0 18px;">
           <div class="breadcrumb">
             <% if (selectedCollection) { %>
@@ -120,10 +121,11 @@
             <div class="eh"><%= selectedCollection ? ('Add a folder to “' + selectedCollection.name + '” with + New folder.') : 'Create a folder to start organising your stories.' %></div>
           </div>
         <% } %>
+        <% } /* end !openFolder */ %>
 
         <!-- ── OPEN FOLDER → its stories ────────────────────────────────── -->
         <% if (openFolder) { %>
-          <div class="flex-between" style="margin:42px 0 18px;">
+          <div class="flex-between" style="margin:20px 0 18px;">
             <div class="breadcrumb">
               <a href="/folders">Folders</a><span>/</span>
               <span class="here"><%= openFolder.name %></span>
