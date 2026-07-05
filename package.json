@@ -9,6 +9,7 @@
     "dev": "node --watch server.js",
     "make-admin": "node scripts/make-admin.js",
     "migrate-to-telegram": "node scripts/migrate-to-telegram.js",
+    "migrate-to-drive": "node scripts/migrate-to-drive.js",
     "backup-db": "node scripts/backup-db.js"
   },
   "engines": {
