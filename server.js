@@ -33,6 +33,9 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      // Browser-direct uploads PUT the bytes to a Google resumable-upload
+      // session URL (www./storage.googleapis.com); allow those XHR targets.
+      connectSrc: ["'self'", 'https://*.googleapis.com'],
       imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
       mediaSrc: ["'self'", 'blob:'],
       objectSrc: ["'none'"],
