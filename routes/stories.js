@@ -402,6 +402,17 @@ router.post('/stories/:id/cover', upload.single('cover'), async (req, res) => {
 router.get('/media/:id', async (req, res) => {
   const media = Media.findById(parseInt(req.params.id, 10));
   if (!media || !media.telegram_file_id) return res.status(404).send('Not found');
+  // Grid tiles request a small preview with ?w=<px>; only photos are shrunk.
+  // If thumbnailing fails, fall through to the full image.
+  const w = parseInt(req.query.w, 10);
+  if (w && media.kind === 'photo') {
+    try {
+      return await storage.streamThumb(media.telegram_file_id, w, res);
+    } catch (err) {
+      if (res.headersSent) return;
+      console.error('[media thumb]', err.message);
+    }
+  }
   try {
     await storage.streamTo(media.telegram_file_id, res, {
       mime: media.mime,

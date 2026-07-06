@@ -61,7 +61,7 @@
                 <video src="/gallery/<%= img.id %>/raw" muted preload="metadata"></video>
                 <div class="media-play">▶</div>
               <% } else { %>
-                <img src="/gallery/<%= img.id %>/raw" alt="" loading="lazy">
+                <img src="/gallery/<%= img.id %>/raw?w=640" data-full="/gallery/<%= img.id %>/raw" alt="" loading="lazy">
               <% } %>
             </div>
           <% }) %>

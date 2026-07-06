@@ -138,6 +138,16 @@ router.post('/register-drive', async (req, res) => {
 router.get('/:id/raw', async (req, res) => {
   const img = Gallery.findById(parseInt(req.params.id, 10));
   if (!img || img.user_id !== req.user.id || !img.telegram_file_id) return res.status(404).send('Not found');
+  // Grid tiles request a small preview with ?w=<px>; only images are shrunk.
+  const w = parseInt(req.query.w, 10);
+  if (w && (img.mime || '').startsWith('image/')) {
+    try {
+      return await storage.streamThumb(img.telegram_file_id, w, res);
+    } catch (err) {
+      if (res.headersSent) return;
+      console.error('[gallery thumb]', err.message);
+    }
+  }
   try {
     await storage.streamTo(img.telegram_file_id, res, { mime: img.mime, fileName: img.file_name, inline: !req.query.download, range: req.headers.range || null });
   } catch (err) {

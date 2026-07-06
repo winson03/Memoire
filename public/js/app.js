@@ -1329,7 +1329,7 @@ function initMedia() {
   }
 
   function thumbInner(m) {
-    if (m.kind === 'photo') return `<img src="/media/${m.id}" alt="" draggable="false">`;
+    if (m.kind === 'photo') return `<img src="/media/${m.id}?w=640" alt="" draggable="false">`;
     if (m.kind === 'video') return `<video src="/media/${m.id}" muted preload="metadata"></video>`;
     return `<span class="media-kind">${escapeHtml((m.kind || 'file').toUpperCase())}</span>`;
   }
@@ -1575,7 +1575,7 @@ function initGallery() {
       collectButton(img.id, activeCollection) +
       (isVideo
         ? `<video src="${img.url}" muted preload="metadata"></video><div class="media-play">▶</div>`
-        : `<img src="${img.url}" alt="" loading="lazy">`);
+        : `<img src="${img.url}?w=640" data-full="${img.url}" alt="" loading="lazy">`);
     // Newest-first view shows fresh uploads at the top; oldest-first at the bottom.
     grid.insertAdjacentElement(newestFirst ? 'afterbegin' : 'beforeend', el);
     if (empty) empty.hidden = true;
@@ -1652,7 +1652,7 @@ function initGallery() {
     const clicked = e.target.closest('.gallery-tile img, .gallery-tile video');
     if (clicked) {
       const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
-      openLightbox(items.map((x) => ({ src: x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })), items.indexOf(clicked));
+      openLightbox(items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })), items.indexOf(clicked));
     }
   });
 }

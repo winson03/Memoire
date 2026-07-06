@@ -160,7 +160,7 @@
                       <select class="media-order" aria-label="Position"><option><%= i + 1 %></option></select>
                       <button type="button" class="media-remove" data-remove="<%= m.id %>" title="Remove">×</button>
                       <% if (m.telegram_file_id && m.kind === 'photo') { %>
-                        <img src="/media/<%= m.id %>" alt="" draggable="false">
+                        <img src="/media/<%= m.id %>?w=640" alt="" draggable="false">
                       <% } else if (m.telegram_file_id && m.kind === 'video') { %>
                         <video src="/media/<%= m.id %>" muted preload="metadata"></video>
                       <% } else { %>
