@@ -681,16 +681,17 @@ function makeUploadEta(files) {
   };
 }
 
-// ── Browser-direct Google Drive uploads (big videos) ─────────────────────────
-// Large videos would exceed the host's request-size/memory limits if relayed
-// through the server, so they go straight to Google: the server mints a
-// resumable session URL (bound to this origin for CORS), the browser PUTs the
-// bytes to Google with progress, then registers the file id with the app.
+// ── Browser-direct Google Drive uploads ──────────────────────────────────────
+// Photos and videos upload straight to Google, bypassing this server: the
+// server mints a resumable session URL (bound to this origin for CORS), the
+// browser PUTs the bytes to Google with progress, then registers the file id
+// with the app. This keeps upload traffic off the host's metered bandwidth.
+// (PDFs/other files still relay through the server so they keep Telegram's
+// document handling — they're small and rare.)
 function wantsDriveDirect(file) {
-  const b = document.body.dataset;
-  if (b.driveDirect !== '1') return false;
-  const min = parseInt(b.driveMin, 10) || 15 * 1024 * 1024;
-  return (file.type || '').startsWith('video/') && file.size > min;
+  if (document.body.dataset.driveDirect !== '1') return false;
+  const t = file.type || '';
+  return t.startsWith('image/') || t.startsWith('video/');
 }
 
 async function uploadToDrive(file, onProgress) {

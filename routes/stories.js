@@ -246,8 +246,8 @@ router.post('/stories/:id/favourite-ajax', (req, res) => {
 });
 
 // ── Media: register a browser-direct Google Drive upload ─────────────────────
-// Big videos go browser → Drive (see POST /drive/upload-session); this stores
-// the resulting Drive file as a media row after verifying it exists.
+// Photos and videos go browser → Drive (see POST /drive/upload-session); this
+// stores the resulting Drive file as a media row after verifying it exists.
 router.post('/stories/:id/media/register-drive', async (req, res) => {
   const book = Books.findById(parseInt(req.params.id, 10));
   if (!ownerOnly(book, req)) return res.status(403).json({ error: 'forbidden' });
@@ -259,6 +259,12 @@ router.post('/stories/:id/media/register-drive', async (req, res) => {
     const mime = req.body.mime || meta.mimeType || '';
     const fileName = req.body.file_name || meta.name || null;
 
+    // Match the Telegram path's kinds so the reader/editor render it right
+    // (photo → <img>, video → <video>, pdf → <iframe>).
+    const kind = mime.startsWith('image/') ? 'photo'
+      : mime.startsWith('video/') ? 'video'
+      : (mime === 'application/pdf' ? 'pdf' : 'document');
+
     const setTitle = (req.body.set_title || '').trim().slice(0, 120);
     if (setTitle && /^untitled (story|novel)$/i.test((book.title || '').trim())) {
       Books.setTitle(book.id, setTitle);
@@ -266,8 +272,8 @@ router.post('/stories/:id/media/register-drive', async (req, res) => {
 
     const media = Media.create({
       book_id: book.id,
-      label: (req.body.label || (fileName || 'Video').replace(/\.[^.]+$/, '')).slice(0, 120),
-      kind: mime.startsWith('video/') ? 'video' : 'document',
+      label: (req.body.label || (fileName || 'Untitled').replace(/\.[^.]+$/, '')).slice(0, 120),
+      kind,
       mime,
       file_name: fileName,
       file_size: Number(meta.size) || null,
