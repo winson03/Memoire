@@ -1544,6 +1544,12 @@ function initGalleryZoom(grid) {
     else if (ratio < 0.74) { zoomOut(); startDist = dist(e.touches); }
   }, { passive: false });
   grid.addEventListener('touchend', (e) => { if (e.touches.length < 2) startDist = 0; });
+
+  // iOS Safari ignores touch-action for pinch and zooms the whole page instead,
+  // so a pinch on the grid never reached the handler above. Cancelling the
+  // native gesture events lets the two-finger touch logic drive the columns.
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((ev) =>
+    grid.addEventListener(ev, (e) => e.preventDefault()));
 }
 
 // ── Standalone image gallery (upload, delete, lightbox) ─────────────────────
