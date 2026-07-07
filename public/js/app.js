@@ -1499,7 +1499,7 @@ function initMedia() {
 function initGalleryZoom(grid) {
   const COLS = [4, 8, 12, 16];          // index 0 = most zoomed in (largest)
   let idx = COLS.indexOf(parseInt(localStorage.getItem('galleryCols'), 10));
-  if (idx === -1) idx = 1;              // default: 8 per row
+  if (idx === -1) idx = 0;              // default: 4 per row (biggest tiles)
 
   const ctrl = document.getElementById('galleryZoom');
   const btnIn = ctrl && ctrl.querySelector('[data-zoom="in"]');
