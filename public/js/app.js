@@ -1515,10 +1515,22 @@ function initGalleryZoom(grid) {
   function zoomOut() { if (idx < COLS.length - 1) { idx++; apply(); } }  // more, smaller
   apply();
 
-  if (ctrl) ctrl.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-zoom]');
-    if (b) (b.dataset.zoom === 'in' ? zoomIn : zoomOut)();
-  });
+  // Bind each button directly and handle touchend too — a delegated click on
+  // the blurred pill was unreliable on iOS Safari, so taps did nothing there.
+  function bindZoom(btn, fn) {
+    if (!btn) return;
+    let touched = false;
+    btn.addEventListener('touchend', (e) => {
+      touched = true;
+      setTimeout(() => { touched = false; }, 500);
+      if (btn.disabled) return;
+      e.preventDefault();      // stop the ghost click that follows
+      fn();
+    }, { passive: false });
+    btn.addEventListener('click', () => { if (!touched && !btn.disabled) fn(); });
+  }
+  bindZoom(btnIn, zoomIn);
+  bindZoom(btnOut, zoomOut);
 
   // Trackpad pinch / Ctrl+scroll (browsers report trackpad pinch as wheel+ctrlKey)
   let wheelAcc = 0;
