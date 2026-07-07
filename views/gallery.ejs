@@ -36,10 +36,6 @@
             <a href="/gallery?order=oldest<%= collQ %>" class="<%= order === 'oldest' ? 'active' : '' %>">Oldest first</a>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
-            <div class="gallery-zoom" id="galleryZoom">
-              <button type="button" data-zoom="in" title="Zoom in — fewer, larger">+</button>
-              <button type="button" data-zoom="out" title="Zoom out — more, smaller">−</button>
-            </div>
             <span id="galleryProgress" class="upload-progress" hidden></span>
             <button type="button" class="btn btn-accent" id="galleryUploadBtn">+ Add media</button>
           </div>
