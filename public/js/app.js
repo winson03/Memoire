@@ -385,10 +385,21 @@ document.addEventListener('DOMContentLoaded', () => {
       if (files.length) { progress.hidden = false; }
       for (let i = 0; i < files.length; i++) {
         progress.textContent = `Uploading ${i + 1}/${files.length}…`;
-        const fd = new FormData();
-        fd.append('file', files[i]);
         try {
-          const res = await fetch(`/stories/${bookId}/media`, { method: 'POST', body: fd });
+          let res;
+          // Photos/videos go browser → Google Drive, bypassing the server.
+          if (wantsDriveDirect(files[i])) {
+            const df = await uploadToDrive(files[i]);
+            res = await fetch(`/stories/${bookId}/media/register-drive`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ drive_id: df.id, file_name: files[i].name, mime: files[i].type, label: files[i].name.replace(/\.[^.]+$/, '') }),
+            });
+          } else {
+            const fd = new FormData();
+            fd.append('file', files[i]);
+            res = await fetch(`/stories/${bookId}/media`, { method: 'POST', body: fd });
+          }
           if (!res.ok) throw new Error('upload failed');
           const data = await res.json();
           const items = data.items || (data.id ? [data] : []);
@@ -636,10 +647,22 @@ function initCover() {
       const original = coverUploadBtn.innerHTML;
       coverUploadBtn.disabled = true;
       coverUploadBtn.innerHTML = '<span class="spinner spinner-sm"></span>Uploading…';
-      const fd = new FormData();
-      fd.append('cover', file);
+      const book = coverUploadBtn.dataset.book;
       try {
-        const res = await fetch(`/stories/${coverUploadBtn.dataset.book}/cover`, { method: 'POST', body: fd });
+        let res;
+        // Cover photos go browser → Google Drive, bypassing the server.
+        if (wantsDriveDirect(file)) {
+          const df = await uploadToDrive(file);
+          res = await fetch(`/stories/${book}/cover/register-drive`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ drive_id: df.id, file_name: file.name, mime: file.type }),
+          });
+        } else {
+          const fd = new FormData();
+          fd.append('cover', file);
+          res = await fetch(`/stories/${book}/cover`, { method: 'POST', body: fd });
+        }
         if (!res.ok) throw new Error('failed');
         const data = await res.json();
         preview.dataset.coverUrl = data.url;

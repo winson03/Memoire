@@ -376,6 +376,38 @@ router.post('/stories/:id/media', upload.single('file'), async (req, res) => {
   }
 });
 
+// ── Cover image: register a browser-direct Google Drive upload ────────────────
+router.post('/stories/:id/cover/register-drive', async (req, res) => {
+  const book = Books.findById(parseInt(req.params.id, 10));
+  if (!ownerOnly(book, req)) return res.status(403).json({ error: 'forbidden' });
+  const driveId = String((req.body && req.body.drive_id) || '').trim();
+  if (!driveId) return res.status(400).json({ error: 'Missing drive_id.' });
+  try {
+    const drive = require('../lib/drive');
+    const meta = await drive.fileMeta(driveId);
+    const mime = req.body.mime || meta.mimeType || '';
+    if (!mime.startsWith('image/')) return res.status(400).json({ error: 'Cover must be an image.' });
+    Media.removeCovers(book.id); // replace any previous cover
+    const media = Media.create({
+      book_id: book.id,
+      label: 'Cover',
+      kind: 'cover',
+      mime,
+      file_name: req.body.file_name || meta.name || null,
+      file_size: Number(meta.size) || null,
+      telegram_file_id: storage.driveKey(meta.id),
+      telegram_unique_id: meta.id,
+      telegram_message_id: null,
+      position: -1,
+    });
+    Books.setCover(book.id, media.id);
+    res.json({ id: media.id, url: '/media/' + media.id });
+  } catch (err) {
+    console.error('[cover register-drive]', err.message);
+    res.status(502).json({ error: 'Could not register the cover: ' + err.message });
+  }
+});
+
 // ── Cover image: upload a custom cover to Telegram ────────────────────────────
 router.post('/stories/:id/cover', upload.single('cover'), async (req, res) => {
   const book = Books.findById(parseInt(req.params.id, 10));
