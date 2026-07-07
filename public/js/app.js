@@ -726,6 +726,49 @@ async function uploadToDrive(file, onProgress) {
   });
 }
 
+// Pop a transient toast (reuses the server flash styling). Auto-dismisses.
+// If the tab is hidden and the user allowed notifications, also fire a system
+// notification so a finished upload pings them even on another tab.
+function showToast(message, type = 'info') {
+  const el = document.createElement('div');
+  el.className = 'flash ' + type;
+  el.textContent = message;
+  el.style.top = '18px';
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity .4s ease, transform .4s ease';
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(-8px)';
+    setTimeout(() => el.remove(), 420);
+  }, 3600);
+
+  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+    try { new Notification(message); } catch (_) { /* ignore */ }
+  }
+}
+
+// Ask once (on a user gesture) for permission to show a system notification,
+// so a finished upload can ping the user if they've switched to another tab.
+function ensureNotifyPermission() {
+  try {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  } catch (_) { /* not supported — the in-app toast still shows */ }
+}
+
+// Toast shown when an upload batch finishes: green tick on full success, a
+// warning (kept as info styling) when some files failed.
+function uploadDoneToast(ok, failed) {
+  if (ok <= 0 && failed <= 0) return;
+  const noun = (n) => n === 1 ? 'item' : 'items';
+  if (failed > 0) {
+    showToast(`Uploaded ${ok} ${noun(ok)} · ${failed} failed`, 'error');
+  } else {
+    showToast(`✅ Upload complete — ${ok} ${noun(ok)}`, 'info');
+  }
+}
+
 // POST a FormData like fetch(), but report upload progress along the way.
 // Resolves to a fetch-Response-alike ({ ok, status, json }).
 function postFormWithProgress(url, formData, onProgress) {
@@ -1127,10 +1170,12 @@ function initMedia() {
   const UPLOAD_CONCURRENCY = 2;
   async function uploadList(files, folderName) {
     if (!files.length) return;
+    ensureNotifyPermission();
     if (folderName) applyFolderTitle(folderName);
     const total = files.length;
     const eta = makeUploadEta(files);
     let done = 0;
+    let failed = 0;
     // Tick every second so the time-left estimate counts down between files.
     const ticker = setInterval(() => showProgress(Math.min(done + 1, total), total, eta), 1000);
     try {
@@ -1138,7 +1183,8 @@ function initMedia() {
       const worker = async () => {
         for (let file = queue.shift(); file; file = queue.shift()) {
           showProgress(Math.min(done + 1, total), total, eta);
-          await uploadFile(file, folderName ? { setTitle: folderName } : {}, (sent) => eta.progress(file, sent));
+          const good = await uploadFile(file, folderName ? { setTitle: folderName } : {}, (sent) => eta.progress(file, sent));
+          if (good === false) failed += 1;
           eta.fileDone(file);
           done += 1;
         }
@@ -1150,6 +1196,7 @@ function initMedia() {
     showProgress(0, 0);
     refreshOrders();
     if (total > 1) await saveOrder();
+    uploadDoneToast(total - failed, failed);
   }
 
   // Natural file-name sort: 1,2,…,10 (not 1,10,2); non-numeric names fall to A–Z.
@@ -1298,6 +1345,7 @@ function initMedia() {
       for (let k = 1; k < tiles.length; k++) tiles[k - 1].after(tiles[k]);
       items.forEach((m) => bindTile(grid.querySelector(`[data-media-id="${m.id}"]`)));
       refreshOrders();
+      return true;
     } catch (err) {
       tile.classList.remove('uploading');
       tile.classList.add('failed');
@@ -1305,6 +1353,7 @@ function initMedia() {
       const msg = (err && err.message) ? err.message.replace(/^Upload failed:\s*/, '') : 'Upload failed';
       if (nameEl) { nameEl.textContent = msg; nameEl.title = msg; }
       setTimeout(() => tile.remove(), 4000);
+      return false;
     }
   }
 
@@ -1585,8 +1634,10 @@ function initGallery() {
     input.addEventListener('change', async () => {
       const files = Array.from(input.files || []).filter((f) => /^(image|video)\//.test(f.type || ''));
       if (!files.length) { input.value = ''; return; }
+      ensureNotifyPermission();
       const eta = makeUploadEta(files);
       let done = 0;
+      let uploaded = 0;
       const ticker = setInterval(() => showProgress(Math.min(done + 1, files.length), files.length, eta), 1000);
       try {
         // A few files travel at once — much faster for big batches.
@@ -1609,7 +1660,7 @@ function initGallery() {
                 if (activeCollection) fd.append('collection_id', activeCollection);
                 res = await postFormWithProgress('/gallery', fd, (sent) => eta.progress(file, sent));
               }
-              if (res.ok) addTile(await res.json());
+              if (res.ok) { addTile(await res.json()); uploaded += 1; }
             } catch (_) { /* skip failed file */ }
             eta.fileDone(file);
             done += 1;
@@ -1621,6 +1672,7 @@ function initGallery() {
       }
       showProgress(0, 0);
       input.value = '';
+      uploadDoneToast(uploaded, files.length - uploaded);
     });
   }
 
