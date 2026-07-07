@@ -105,7 +105,7 @@ function escapeAttr(s) { return escapeHtml(s); }
 // Full-screen image viewer. `items` is an array of { src, caption }; the
 // viewer opens at `index` and can slide between images (buttons, arrow keys,
 // swipe).
-function openLightbox(items, index) {
+function openLightbox(items, index, onClose) {
   if (!Array.isArray(items)) items = [{ src: items, caption: arguments[1] || '' }]; // legacy single-arg
   let i = Math.max(0, Math.min(index || 0, items.length - 1));
   const multi = items.length > 1;
@@ -140,6 +140,9 @@ function openLightbox(items, index) {
     bd.remove();
     document.body.style.overflow = '';
     document.removeEventListener('keydown', onKey);
+    // Tell the caller which image we ended on, so it can bring that one into
+    // view (e.g. you paged 20 → 30 in the lightbox, then land back at 30).
+    if (typeof onClose === 'function') onClose(i);
   }
   function onKey(e) {
     if (e.key === 'Escape') close();
@@ -558,7 +561,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     figImgs.forEach((img, idx) => {
       img.style.cursor = 'zoom-in';
-      img.addEventListener('click', () => openLightbox(gallery, idx));
+      img.addEventListener('click', () => openLightbox(gallery, idx, (end) => {
+        if (figImgs[end]) figImgs[end].scrollIntoView({ block: 'center' });
+      }));
     });
   }
 
@@ -1682,7 +1687,11 @@ function initGallery() {
     const clicked = e.target.closest('.gallery-tile img, .gallery-tile video');
     if (clicked) {
       const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
-      openLightbox(items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })), items.indexOf(clicked));
+      openLightbox(
+        items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
+        items.indexOf(clicked),
+        (end) => { if (items[end]) items[end].scrollIntoView({ block: 'center' }); }
+      );
     }
   });
 }
