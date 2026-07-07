@@ -332,12 +332,25 @@ textarea.input { line-height: 1.5; resize: vertical; }
 @media (hover: none) {
   .gallery-tile .media-remove, .gallery-tile .tile-collect { opacity: 1; }
 }
-/* Small screens: tabs scroll sideways in one row instead of stacking. */
+/* Small screens: collections become one swipeable row instead of a stack. */
 @media (max-width: 640px) {
   .gallery-tabs { gap: 8px; margin-bottom: 12px; }
-  .gallery-tabs .sort-toggle { max-width: 100%; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  /* Collections stay in one row and scroll their tabs inside — snug when few,
+     scrollable when many (no wrapping, no page overflow). */
+  .gallery-tabs .sort-toggle {
+    max-width: 100%; flex-wrap: nowrap; overflow-x: auto; scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
   .gallery-tabs .sort-toggle::-webkit-scrollbar { display: none; }
+  /* Right-edge fade to hint "more →", added by JS only when it overflows. */
+  .gallery-tabs .sort-toggle.scrollable {
+    width: 100%;
+    -webkit-mask-image: linear-gradient(to right, #000 88%, transparent);
+            mask-image: linear-gradient(to right, #000 88%, transparent);
+  }
   .gallery-tabs .sort-toggle a, .sort-toggle a { white-space: nowrap; padding: 6px 12px; font-size: 12.5px; }
+  /* Put "+ New collection" / "Delete" on their own clean line below the strip. */
+  .gallery-tabs > .btn, .gallery-tabs > form { flex: none; }
   .gallery-bar { gap: 10px; margin-bottom: 16px; }
 }
 .sort-toggle { display: inline-flex; background: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.8); border-radius: 100px; padding: 3px; backdrop-filter: blur(8px); }

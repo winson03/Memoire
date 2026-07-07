@@ -1508,6 +1508,16 @@ function initGallery() {
   let collections = [];
   try { collections = JSON.parse(grid.dataset.collections || '[]'); } catch (_) { /* none */ }
 
+  // Show the "swipe for more →" fade on the collection strip only when its
+  // tabs actually overflow (so a few collections stay snug, not stretched).
+  const collStrip = document.querySelector('.gallery-tabs .sort-toggle');
+  if (collStrip) {
+    const syncScrollHint = () =>
+      collStrip.classList.toggle('scrollable', collStrip.scrollWidth > collStrip.clientWidth + 4);
+    syncScrollHint();
+    window.addEventListener('resize', syncScrollHint);
+  }
+
   if (btn && input) btn.addEventListener('click', () => input.click());
 
   function showProgress(done, total, eta) {
