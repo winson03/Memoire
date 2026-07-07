@@ -475,6 +475,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Standalone image gallery.
   initGallery();
 
+  // Reader: grid/list layout toggle for a photo story's images.
+  initReaderFigs();
+
   // Library: bulk folder import (1 folder = 1 private story).
   initFolderImport();
 
@@ -1493,6 +1496,29 @@ function initMedia() {
 
   orderableTiles().forEach(bindTile);
   refreshOrders();
+}
+
+// ── Reader: grid/list toggle for a photo story's images ─────────────────────
+// The choice is remembered in localStorage, so it survives refresh/return.
+function initReaderFigs() {
+  const figs = document.getElementById('readerFigs');
+  const toggle = document.getElementById('figsView');
+  if (!figs || !toggle) return;
+  const KEY = 'readerFigsView';
+  const buttons = toggle.querySelectorAll('button[data-view]');
+
+  function apply(view) {
+    figs.classList.toggle('grid', view === 'grid');
+    buttons.forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+    try { localStorage.setItem(KEY, view); } catch (_) { /* private mode */ }
+  }
+
+  let saved = 'list';
+  try { if (localStorage.getItem(KEY) === 'grid') saved = 'grid'; } catch (_) { /* ignore */ }
+  apply(saved);
+
+  // Bind each button directly (reliable taps on mobile).
+  buttons.forEach((b) => b.addEventListener('click', () => apply(b.dataset.view)));
 }
 
 // ── Standalone image gallery (upload, delete, lightbox) ─────────────────────

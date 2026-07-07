@@ -65,7 +65,15 @@
               <div class="empty"><div class="et">Nothing written yet</div><div class="eh">Open the editor and add paragraphs &amp; images to start.</div></div>
             <% } %>
           <% } else { %>
-          <div class="reader-figs">
+          <% if (photos.length) { %>
+            <div class="figs-view-row">
+              <div class="figs-view" id="figsView" role="group" aria-label="Photo layout">
+                <button type="button" data-view="list" title="List view" aria-label="List view">☰</button>
+                <button type="button" data-view="grid" title="Grid view" aria-label="Grid view">▦</button>
+              </div>
+            </div>
+          <% } %>
+          <div class="reader-figs" id="readerFigs">
             <% if (photos.length) { %>
               <% photos.forEach(function(m){ %>
                 <figure>
