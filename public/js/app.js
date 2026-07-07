@@ -1007,11 +1007,28 @@ function initFolderImport() {
         const queue = g.files.map((file, idx) => ({ file, idx }));
         const worker = async () => {
           for (let it = queue.shift(); it; it = queue.shift()) {
-            const fd = new FormData();
-            fd.append('file', it.file);
-            fd.append('label', it.file.name.replace(/\.[^.]+$/, ''));
             try {
-              const res = await postFormWithProgress(`/stories/${id}/media`, fd, (sent) => eta.progress(it.file, sent));
+              let res;
+              // Photos/videos go browser → Google Drive (bypass the server);
+              // anything else relays through the server as before.
+              if (wantsDriveDirect(it.file)) {
+                const df = await uploadToDrive(it.file, (sent) => eta.progress(it.file, sent));
+                res = await fetch(`/stories/${id}/media/register-drive`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    drive_id: df.id,
+                    file_name: it.file.name,
+                    mime: it.file.type,
+                    label: it.file.name.replace(/\.[^.]+$/, ''),
+                  }),
+                });
+              } else {
+                const fd = new FormData();
+                fd.append('file', it.file);
+                fd.append('label', it.file.name.replace(/\.[^.]+$/, ''));
+                res = await postFormWithProgress(`/stories/${id}/media`, fd, (sent) => eta.progress(it.file, sent));
+              }
               if (res.ok) {
                 const item = ((await res.json()).items || [])[0];
                 if (item) ids[it.idx] = item.id;
