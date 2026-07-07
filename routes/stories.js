@@ -290,6 +290,20 @@ router.post('/stories/:id/media/register-drive', async (req, res) => {
   }
 });
 
+// ── Media: record a "batch upload finished" bell notification ─────────────────
+// Called by the client once an upload batch completes (uploads run in the
+// browser, so the server can't tell on its own). Links back to the editor.
+router.post('/stories/:id/media/notify-complete', (req, res) => {
+  const book = Books.findById(parseInt(req.params.id, 10));
+  if (!ownerOnly(book, req)) return res.status(403).json({ error: 'forbidden' });
+  const count = Math.max(0, parseInt(req.body && req.body.count, 10) || 0);
+  if (!count) return res.json({ ok: true });
+  const title = (book.title || 'your story').trim();
+  const message = `${count} ${count === 1 ? 'photo' : 'photos'} added to “${title}”`;
+  Notifications.create({ user_id: req.user.id, type: 'upload', book_id: book.id, message });
+  res.json({ ok: true, notification: { message, href: '/editor?id=' + book.id } });
+});
+
 // ── Media: upload to Telegram ─────────────────────────────────────────────────
 router.post('/stories/:id/media', upload.single('file'), async (req, res) => {
   const book = Books.findById(parseInt(req.params.id, 10));

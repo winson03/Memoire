@@ -9,7 +9,7 @@ const os = require('os');
 const fs = require('fs');
 const router = express.Router();
 const { ensureAuth } = require('../middleware/auth');
-const { Gallery, Collections } = require('../lib/queries');
+const { Gallery, Collections, Notifications } = require('../lib/queries');
 const { FOLDER_PALETTE } = require('../lib/themes');
 const storage = require('../lib/storage');
 
@@ -132,6 +132,15 @@ router.post('/register-drive', async (req, res) => {
     console.error('[gallery register-drive]', err.message);
     res.status(502).json({ error: 'Could not register the upload: ' + err.message });
   }
+});
+
+// Record a "batch upload finished" bell notification for gallery uploads.
+router.post('/notify-complete', (req, res) => {
+  const count = Math.max(0, parseInt(req.body && req.body.count, 10) || 0);
+  if (!count) return res.json({ ok: true });
+  const message = `${count} ${count === 1 ? 'photo' : 'photos'} added to your gallery`;
+  Notifications.create({ user_id: req.user.id, type: 'upload', book_id: null, message });
+  res.json({ ok: true, notification: { message, href: '/gallery' } });
 });
 
 // Stream an image's bytes (owner only — the gallery is private).

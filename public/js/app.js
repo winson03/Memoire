@@ -726,46 +726,42 @@ async function uploadToDrive(file, onProgress) {
   });
 }
 
-// Pop a transient toast (reuses the server flash styling). Auto-dismisses.
-// If the tab is hidden and the user allowed notifications, also fire a system
-// notification so a finished upload pings them even on another tab.
-function showToast(message, type = 'info') {
-  const el = document.createElement('div');
-  el.className = 'flash ' + type;
-  el.textContent = message;
-  el.style.top = '18px';
-  document.body.appendChild(el);
-  setTimeout(() => {
-    el.style.transition = 'opacity .4s ease, transform .4s ease';
-    el.style.opacity = '0';
-    el.style.transform = 'translateX(-50%) translateY(-8px)';
-    setTimeout(() => el.remove(), 420);
-  }, 3600);
+// When an upload batch finishes, ask the server to record a bell notification
+// ("N photos added to …"), then drop it into the bell live so the user sees it
+// without a refresh. The server keeps the persistent copy for later loads.
+function notifyUploadComplete(url, count) {
+  if (!count || count <= 0) return;
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ count }),
+  })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => { if (d && d.notification) bumpBell(d.notification.message, d.notification.href); })
+    .catch(() => { /* the notification is still saved server-side */ });
+}
 
-  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-    try { new Notification(message); } catch (_) { /* ignore */ }
+// Live-update the notification bell: bump the unread badge and prepend an item,
+// matching the server-rendered markup so it looks identical after a reload.
+function bumpBell(message, href) {
+  const bell = document.getElementById('notifBell');
+  if (bell) {
+    let badge = bell.querySelector('.notif-badge');
+    if (!badge) { badge = document.createElement('span'); badge.className = 'notif-badge'; bell.appendChild(badge); }
+    const cur = parseInt(badge.textContent, 10) || 0;
+    badge.textContent = cur + 1 > 9 ? '9+' : String(cur + 1);
   }
-}
-
-// Ask once (on a user gesture) for permission to show a system notification,
-// so a finished upload can ping the user if they've switched to another tab.
-function ensureNotifyPermission() {
-  try {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
-    }
-  } catch (_) { /* not supported — the in-app toast still shows */ }
-}
-
-// Toast shown when an upload batch finishes: green tick on full success, a
-// warning (kept as info styling) when some files failed.
-function uploadDoneToast(ok, failed) {
-  if (ok <= 0 && failed <= 0) return;
-  const noun = (n) => n === 1 ? 'item' : 'items';
-  if (failed > 0) {
-    showToast(`Uploaded ${ok} ${noun(ok)} · ${failed} failed`, 'error');
-  } else {
-    showToast(`✅ Upload complete — ${ok} ${noun(ok)}`, 'info');
+  const list = document.querySelector('.notif-list');
+  if (list) {
+    const empty = list.querySelector('.notif-empty');
+    if (empty) empty.remove();
+    const a = document.createElement('a');
+    a.className = 'notif-item unread';
+    a.href = href || '#';
+    a.innerHTML = '<span class="notif-ic upload">🖼️</span><span class="notif-body">'
+      + '<span class="notif-text"></span><span class="notif-time">just now</span></span>';
+    a.querySelector('.notif-text').textContent = message;
+    list.insertBefore(a, list.firstChild);
   }
 }
 
@@ -1170,7 +1166,6 @@ function initMedia() {
   const UPLOAD_CONCURRENCY = 2;
   async function uploadList(files, folderName) {
     if (!files.length) return;
-    ensureNotifyPermission();
     if (folderName) applyFolderTitle(folderName);
     const total = files.length;
     const eta = makeUploadEta(files);
@@ -1196,7 +1191,8 @@ function initMedia() {
     showProgress(0, 0);
     refreshOrders();
     if (total > 1) await saveOrder();
-    uploadDoneToast(total - failed, failed);
+    // One bell notification per batch (skip trivial single-photo adds).
+    if (total > 1) notifyUploadComplete(`/stories/${bookId}/media/notify-complete`, total - failed);
   }
 
   // Natural file-name sort: 1,2,…,10 (not 1,10,2); non-numeric names fall to A–Z.
@@ -1634,7 +1630,6 @@ function initGallery() {
     input.addEventListener('change', async () => {
       const files = Array.from(input.files || []).filter((f) => /^(image|video)\//.test(f.type || ''));
       if (!files.length) { input.value = ''; return; }
-      ensureNotifyPermission();
       const eta = makeUploadEta(files);
       let done = 0;
       let uploaded = 0;
@@ -1672,7 +1667,7 @@ function initGallery() {
       }
       showProgress(0, 0);
       input.value = '';
-      uploadDoneToast(uploaded, files.length - uploaded);
+      if (files.length > 1) notifyUploadComplete('/gallery/notify-complete', uploaded);
     });
   }
 

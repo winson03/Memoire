@@ -35,13 +35,17 @@
             <% notifications.forEach(function(n){ %>
               <%
                 var isLike = n.type === 'like';
-                var href = (isLike && n.book_id) ? ('/reader/' + n.book_id) : '#';
-                var icon = isLike ? '♥' : '🎂';
+                var isUpload = n.type === 'upload';
+                var href = '#';
+                if (isLike && n.book_id) href = '/reader/' + n.book_id;
+                else if (isUpload) href = n.book_id ? ('/editor?id=' + n.book_id) : '/gallery';
+                var icon = isLike ? '♥' : (isUpload ? '🖼️' : '🎂');
+                var icClass = isLike ? 'like' : (isUpload ? 'upload' : 'cake');
                 var text = n.message;
                 if (isLike) { text = (n.actor_name || 'Someone') + ' liked “' + (n.book_title || 'your story') + '”'; }
               %>
               <a class="notif-item <%= n.is_read ? '' : 'unread' %>" href="<%= href %>">
-                <span class="notif-ic <%= isLike ? 'like' : 'cake' %>"><%= icon %></span>
+                <span class="notif-ic <%= icClass %>"><%= icon %></span>
                 <span class="notif-body">
                   <span class="notif-text"><%= text %></span>
                   <span class="notif-time"><%= relativeTime(n.created_at) %></span>

@@ -622,6 +622,7 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .notif-ic { flex: none; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; }
 .notif-ic.like { background: rgba(194,104,62,0.14); color: var(--accent, #C2683E); }
 .notif-ic.cake { background: rgba(214,160,84,0.2); }
+.notif-ic.upload { background: rgba(96,150,120,0.18); }
 .notif-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .notif-text { font-size: 13.5px; line-height: 1.4; }
 .notif-time { font-size: 11.5px; color: rgba(58,50,42,0.42); }
