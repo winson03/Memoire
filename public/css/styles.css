@@ -163,6 +163,9 @@ a { color: inherit; text-decoration: none; }
 .sidebar { width: 264px; flex: none; background: rgba(255,255,255,0.55); backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px); border-right: 1px solid rgba(255,255,255,0.7); padding: 24px 18px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
 .sidebar-logo { display: flex; align-items: center; justify-content: center; padding: 4px 8px; margin-bottom: 20px; cursor: pointer; }
 .sidebar-logo-img { width: 150px; max-width: 100%; height: auto; display: block; }
+/* Emblem-only mark used on the landing header and auth cards. */
+.logo .logo-mark-img { height: 38px; width: auto; display: block; }
+.login-mark-img { height: 56px; width: auto; display: block; margin: 0 auto 22px; }
 .sidebar-logo .logo-mark { width: 34px; height: 34px; font-size: 21px; box-shadow: 0 6px 14px rgba(194,104,62,0.28); }
 .sidebar-logo .logo-word { font-size: 22px; }
 .new-btn-row { display: flex; gap: 8px; margin-bottom: 24px; }
@@ -645,6 +648,7 @@ textarea.input { line-height: 1.5; resize: vertical; }
   .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); transition: transform .25s; z-index: 40; box-shadow: 0 20px 60px rgba(60,40,28,0.28);
     background: rgba(255,255,255,0.7); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); }
   .sidebar.open { transform: translateX(0); }
+  .sidebar-logo-img { width: 112px; }
   .menu-toggle { display: inline-flex; }
 }
 
