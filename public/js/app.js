@@ -492,6 +492,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reader: grid/list layout toggle for a photo story's images.
   initReaderFigs();
 
+  // Folder view: per-folder story sorting (remembered per folder).
+  initFolderSort();
+
   // Library: bulk folder import (1 folder = 1 private story).
   initFolderImport();
 
@@ -1541,6 +1544,39 @@ function initMedia() {
 
   orderableTiles().forEach(bindTile);
   refreshOrders();
+}
+
+// ── Folder view: sort a folder's stories, remembered per folder ─────────────
+// The choice is stored under folderSort:<id>, so each folder keeps its own
+// sort and it survives refresh/return.
+function initFolderSort() {
+  const grid = document.getElementById('folderStories');
+  const select = document.getElementById('folderSortSelect');
+  if (!grid || !select) return;
+  const KEY = 'folderSort:' + grid.dataset.folder;
+
+  function apply(mode) {
+    const cards = Array.from(grid.querySelectorAll('.cover-card'));
+    const dateDesc = (a, b) => (b.dataset.date || '').localeCompare(a.dataset.date || ''); // newest first
+    const name = (a, b) => (a.dataset.title || '').localeCompare(b.dataset.title || '', undefined, { numeric: true, sensitivity: 'base' });
+    let cmp;
+    if (mode === 'oldest') cmp = (a, b) => dateDesc(b, a);
+    else if (mode === 'az') cmp = name;
+    else if (mode === 'za') cmp = (a, b) => name(b, a);
+    else if (mode === 'fav') cmp = (a, b) => (Number(b.dataset.fav) - Number(a.dataset.fav)) || dateDesc(a, b);
+    else cmp = dateDesc; // 'latest'
+    cards.sort(cmp).forEach((c) => grid.appendChild(c)); // re-append in new order
+  }
+
+  let saved = 'latest';
+  try { saved = localStorage.getItem(KEY) || 'latest'; } catch (_) { /* private mode */ }
+  select.value = saved;
+  apply(saved);
+
+  select.addEventListener('change', () => {
+    apply(select.value);
+    try { localStorage.setItem(KEY, select.value); } catch (_) { /* ignore */ }
+  });
 }
 
 // ── Reader: grid/list toggle for a photo story's images ─────────────────────

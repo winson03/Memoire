@@ -134,7 +134,20 @@
             </div>
           </div>
           <% if (folderBooks.length) { %>
-            <div class="cover-grid sm">
+            <% if (folderBooks.length > 1) { %>
+              <div class="folder-sort-row">
+                <label class="folder-sort">Sort
+                  <select id="folderSortSelect">
+                    <option value="latest">Latest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="az">Name A–Z</option>
+                    <option value="za">Name Z–A</option>
+                    <option value="fav">Favourites first</option>
+                  </select>
+                </label>
+              </div>
+            <% } %>
+            <div class="cover-grid sm" id="folderStories" data-folder="<%= openFolder.id %>">
               <% folderBooks.forEach(function(book){ %>
                 <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'status', small: true } }) %>
               <% }) %>

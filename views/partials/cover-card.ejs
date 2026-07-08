@@ -6,7 +6,7 @@
   var faved = favIds.indexOf(book.id) !== -1;
   var titleSize = o.titleSize || (o.small ? 20 : 21);
 %>
-<div class="cover-card" data-href="/reader/<%= book.id %>">
+<div class="cover-card" data-href="/reader/<%= book.id %>" data-title="<%= book.title || '' %>" data-date="<%= book.created_at || '' %>" data-fav="<%= faved ? '1' : '0' %>">
   <div class="cover-spine <%= coverIsImage(book) ? 'has-image' : '' %>" style="background: <%= coverBackground(book) %>;">
     <% if (showFav) { %>
       <div class="cover-top">
