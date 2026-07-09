@@ -1685,6 +1685,8 @@ function initGallery() {
   const progress = document.getElementById('galleryProgress');
   const newestFirst = grid.dataset.order !== 'oldest';
   const activeCollection = grid.dataset.collection || '';
+  let collections = [];
+  try { collections = JSON.parse(grid.dataset.collections || '[]'); } catch (_) { /* none */ }
 
   // Show the "swipe for more →" fade on the collection strip only when its
   // tabs actually overflow (so a few collections stay snug, not stretched).
@@ -1788,6 +1790,44 @@ function initGallery() {
   });
   const selCancel = document.getElementById('gallerySelectCancel');
   if (selCancel) selCancel.addEventListener('click', exitSelect);
+
+  // Chooser dialog for adding the selected images to a collection (or removing
+  // them from one via "No collection").
+  function openBulkCollectionChooser(ids) {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'dialog-backdrop';
+    const opts = collections.concat([{ id: '', name: 'No collection (remove)' }]);
+    backdrop.innerHTML =
+      '<div class="dialog-card" role="dialog" aria-modal="true">' +
+      `<h3>Add ${ids.length} ${ids.length === 1 ? 'image' : 'images'} to…</h3>` +
+      '<div class="chooser">' +
+      opts.map((c) => `<button type="button" class="chooser-opt" data-id="${c.id}">${escapeHtml(c.name)}</button>`).join('') +
+      '</div><div class="dialog-actions"><button type="button" class="dialog-cancel">Cancel</button></div></div>';
+    document.body.appendChild(backdrop);
+    const close = () => backdrop.remove();
+    backdrop.addEventListener('click', close);
+    backdrop.querySelector('.dialog-card').addEventListener('click', (e) => e.stopPropagation());
+    backdrop.querySelector('.dialog-cancel').addEventListener('click', close);
+    backdrop.querySelectorAll('.chooser-opt').forEach((b) => b.addEventListener('click', async () => {
+      await fetch('/gallery/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, collection_id: b.dataset.id }),
+      });
+      close();
+      // If viewing a specific collection and the images moved elsewhere, drop them.
+      if (activeCollection && b.dataset.id !== activeCollection) {
+        selectedTiles().forEach((t) => t.remove());
+        if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
+      }
+      exitSelect();
+    }));
+  }
+  const selAssign = document.getElementById('gallerySelectAssign');
+  if (selAssign) selAssign.addEventListener('click', () => {
+    const ids = selectedIds();
+    if (ids.length) openBulkCollectionChooser(ids);
+  });
 
   const selDownload = document.getElementById('gallerySelectDownload');
   if (selDownload) selDownload.addEventListener('click', () => {

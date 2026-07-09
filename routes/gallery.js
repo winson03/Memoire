@@ -94,6 +94,21 @@ router.post('/collections/:id/assign', (req, res) => {
   res.json({ ok: true });
 });
 
+// Bulk move selected media into a collection (or out, when collection_id is
+// empty). Used by the "Add to collection" action in bulk-select mode.
+router.post('/move', (req, res) => {
+  const ids = Array.isArray(req.body && req.body.ids)
+    ? req.body.ids.map((x) => parseInt(x, 10)).filter(Boolean)
+    : [];
+  const coll = ownCollection(req, req.body && req.body.collection_id);
+  const target = coll ? coll.id : null;
+  ids.forEach((id) => {
+    const img = Gallery.findById(id);
+    if (img && img.user_id === req.user.id) Gallery.setCollection(id, target);
+  });
+  res.json({ ok: true, collection_id: target });
+});
+
 // Bulk delete selected media (owner only).
 router.post('/bulk-delete', (req, res) => {
   const ids = Array.isArray(req.body && req.body.ids)

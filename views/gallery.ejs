@@ -61,6 +61,7 @@
 
         <div class="gallery-grid <%= assignMode ? 'select-mode' : '' %>" id="galleryGrid" data-order="<%= order %>"
              data-collection="<%= activeCollection ? activeCollection.id : '' %>"
+             data-collections="<%- JSON.stringify(collections.map(function(c){ return { id: c.id, name: c.name }; })).replace(/"/g, '&quot;') %>"
              <% if (assignMode) { %>data-assign="1"<% } %>>
           <% images.forEach(function(img){ %>
             <% var inColl = assignMode && img.collection_id === activeCollection.id; %>
@@ -87,10 +88,13 @@
         <% } else { %>
           <div class="assign-bar" id="gallerySelectBar" hidden>
             <span class="assign-count" id="gallerySelectCount">0 selected</span>
-            <div style="display:flex;gap:10px;align-items:center;">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
               <button type="button" class="btn btn-soft" id="gallerySelectCancel">Cancel</button>
-              <button type="button" class="btn btn-soft" id="gallerySelectDownload">↓ Download</button>
-              <button type="button" class="btn-delete" id="gallerySelectDelete">Delete</button>
+              <% if (collections.length) { %>
+                <button type="button" class="btn btn-accent" id="gallerySelectAssign">Add to collection</button>
+              <% } %>
+              <button type="button" class="btn btn-download" id="gallerySelectDownload">Download</button>
+              <button type="button" class="btn btn-danger" id="gallerySelectDelete">Delete</button>
             </div>
           </div>
         <% } %>
