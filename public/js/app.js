@@ -492,6 +492,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reader: grid/list layout toggle for a photo story's images.
   initReaderFigs();
 
+  // Reader: keep only the photos near the viewport loaded (memory-bounded).
+  initReaderFigWindow();
+
   // Folder view: per-folder story sorting (remembered per folder).
   initFolderSort();
 
@@ -1602,6 +1605,32 @@ function initReaderFigs() {
 
   // Bind each button directly (reliable taps on mobile).
   buttons.forEach((b) => b.addEventListener('click', () => apply(b.dataset.view)));
+}
+
+// ── Reader: window the photo grid ───────────────────────────────────────────
+// A story can hold hundreds of photos. loading="lazy" only defers the initial
+// load — once you scroll past an image Safari keeps its decoded bitmap, so
+// memory climbs until the phone's per-tab budget is hit and the tab crashes
+// ("A problem repeatedly occurred"). Each .photo-frame reserves its space with
+// a fixed CSS aspect-ratio, so we can drop an off-screen image's src to free
+// its memory with no layout shift, and reload it when it scrolls back — keeping
+// the number of decoded images (and thus memory) bounded to the visible window.
+function initReaderFigWindow() {
+  const figs = document.getElementById('readerFigs');
+  if (!figs) return;
+  const imgs = Array.from(figs.querySelectorAll('img[data-src]'));
+  if (!imgs.length) return;
+
+  const mount = (img) => { if (!img.getAttribute('src')) img.src = img.dataset.src; };
+  if (!('IntersectionObserver' in window)) { imgs.forEach(mount); return; } // old browser: load all
+
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) mount(e.target);
+      else if (e.target.getAttribute('src')) e.target.removeAttribute('src'); // unmount → free memory
+    }
+  }, { rootMargin: '1200px 0px', threshold: 0 });
+  imgs.forEach((img) => io.observe(img));
 }
 
 // ── Standalone image gallery (upload, delete, lightbox) ─────────────────────
