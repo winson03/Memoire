@@ -8,7 +8,7 @@
       <form class="page" method="post" action="/stories/<%= book.id %>" id="editorForm"
             data-existing-titles="<%= JSON.stringify(otherTitles || []) %>">
         <div class="editor-top">
-          <a href="/reader/<%= book.id %>" class="btn-ghost">← Discard &amp; close</a>
+          <a href="/reader/<%= book.id %>" data-back class="btn-ghost">← Discard &amp; close</a>
           <div style="display:flex;gap:12px;align-items:center;">
             <% if (book.is_saved) { %>
               <button type="button" class="btn-danger-soft" style="width:auto;padding:11px 18px;"
