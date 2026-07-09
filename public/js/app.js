@@ -1597,6 +1597,7 @@ function initReaderFigs() {
     figs.classList.toggle('grid', view === 'grid');
     buttons.forEach((b) => b.classList.toggle('active', b.dataset.view === view));
     try { localStorage.setItem(KEY, view); } catch (_) { /* private mode */ }
+    figs.dispatchEvent(new CustomEvent('reader:viewchange')); // reload loaded imgs at the new size
   }
 
   let saved = 'list';
@@ -1615,22 +1616,38 @@ function initReaderFigs() {
 // a fixed CSS aspect-ratio, so we can drop an off-screen image's src to free
 // its memory with no layout shift, and reload it when it scrolls back — keeping
 // the number of decoded images (and thus memory) bounded to the visible window.
+// Keep only images near the viewport loaded. `widthFor()` returns the ?w= width
+// to request (tiny grid tiles need far less than full-width list images). The
+// window is small on purpose: a story can hold 500+ photos, and every decoded
+// image counts against the phone's per-tab budget. `refresh` (optional) is an
+// element that fires 'reader:viewchange' when layout changes so loaded images
+// re-request at the new size.
+function windowImages(imgs, widthFor, refresh) {
+  if (!imgs.length) return;
+  const srcFor = (img) => `${img.dataset.full}?w=${widthFor()}`;
+  const mount = (img) => { const s = srcFor(img); if (img.getAttribute('src') !== s) img.src = s; };
+  const unmount = (img) => { if (img.getAttribute('src')) img.removeAttribute('src'); };
+
+  if (!('IntersectionObserver' in window)) { imgs.forEach(mount); return; } // old browser: load all
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) { if (e.isIntersecting) mount(e.target); else unmount(e.target); }
+  }, { rootMargin: '400px 0px', threshold: 0 });
+  imgs.forEach((img) => io.observe(img));
+
+  if (refresh) refresh.addEventListener('reader:viewchange', () => {
+    imgs.forEach((img) => { if (img.getAttribute('src')) mount(img); }); // reload visible at new size
+  });
+}
+
 function initReaderFigWindow() {
   const figs = document.getElementById('readerFigs');
-  if (!figs) return;
-  const imgs = Array.from(figs.querySelectorAll('img[data-src]'));
-  if (!imgs.length) return;
-
-  const mount = (img) => { if (!img.getAttribute('src')) img.src = img.dataset.src; };
-  if (!('IntersectionObserver' in window)) { imgs.forEach(mount); return; } // old browser: load all
-
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (e.isIntersecting) mount(e.target);
-      else if (e.target.getAttribute('src')) e.target.removeAttribute('src'); // unmount → free memory
-    }
-  }, { rootMargin: '1200px 0px', threshold: 0 });
-  imgs.forEach((img) => io.observe(img));
+  if (figs) {
+    // Grid tiles are small (~2-4 per row); list images span the column.
+    windowImages(Array.from(figs.querySelectorAll('img[data-full]')),
+      () => (figs.classList.contains('grid') ? 640 : 1080), figs);
+  }
+  const body = document.querySelector('.story-body');
+  if (body) windowImages(Array.from(body.querySelectorAll('img[data-full]')), () => 1080, null);
 }
 
 // ── Standalone image gallery (upload, delete, lightbox) ─────────────────────

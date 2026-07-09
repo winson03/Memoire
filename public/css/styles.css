@@ -508,6 +508,9 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .story-body p { margin: 0; font-size: 17.5px; line-height: 1.7; color: rgba(58,50,42,0.82); white-space: pre-line; }
 .story-img { margin: 6px 0; }
 .story-img img { display: block; width: 100%; border-radius: 16px; box-shadow: 0 8px 24px rgba(120,80,50,0.12); cursor: zoom-in; }
+/* Windowed inline images have no src until scrolled near; reserve space so
+   unloading one (to free memory) doesn't collapse the layout and jump the page. */
+.story-img img:not([src]) { min-height: 260px; background: rgba(255,255,255,0.4); box-shadow: none; }
 .story-img figcaption { font-family: var(--head-font); font-style: italic; font-size: 15px; color: rgba(58,50,42,0.52); margin-top: 10px; text-align: center; }
 
 .bar { width: 70%; max-width: 38px; min-height: 3px; background: linear-gradient(180deg, var(--accent), var(--accent-alt)); border-radius: 6px 6px 0 0; transition: height .3s ease; }
