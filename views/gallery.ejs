@@ -45,6 +45,9 @@
               <a href="/gallery?order=oldest<%= collQ %>" class="<%= order === 'oldest' ? 'active' : '' %>">Oldest first</a>
             </div>
             <div style="display:flex;align-items:center;gap:10px;">
+              <% if (images.length) { %>
+                <button type="button" class="btn btn-soft" id="gallerySelectBtn">Select</button>
+              <% } %>
               <% if (activeCollection) { %>
                 <a class="btn btn-soft" href="/gallery?order=<%= order %><%= collQ %>&assign=1">Assign images</a>
               <% } %>
@@ -62,12 +65,7 @@
           <% images.forEach(function(img){ %>
             <% var inColl = assignMode && img.collection_id === activeCollection.id; %>
             <div class="gallery-tile <%= inColl ? 'selected' : '' %>" data-id="<%= img.id %>">
-              <% if (assignMode) { %>
-                <span class="tile-check" aria-hidden="true">✓</span>
-              <% } else { %>
-                <button type="button" class="media-remove" data-del="<%= img.id %>" title="Remove">×</button>
-                <a class="media-download" href="/gallery/<%= img.id %>/raw?download=1" download title="Download">↓</a>
-              <% } %>
+              <span class="tile-check" aria-hidden="true">✓</span>
               <% if ((img.mime || '').startsWith('video/')) { %>
                 <video src="/gallery/<%= img.id %>/raw" muted preload="metadata"></video>
                 <div class="media-play">▶</div>
@@ -84,6 +82,15 @@
             <div style="display:flex;gap:10px;align-items:center;">
               <a class="btn btn-soft" href="/gallery?order=<%= order %><%= collQ %>">Cancel</a>
               <button type="button" class="btn btn-accent" id="assignSave">Save</button>
+            </div>
+          </div>
+        <% } else { %>
+          <div class="assign-bar" id="gallerySelectBar" hidden>
+            <span class="assign-count" id="gallerySelectCount">0 selected</span>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <button type="button" class="btn btn-soft" id="gallerySelectCancel">Cancel</button>
+              <button type="button" class="btn btn-soft" id="gallerySelectDownload">↓ Download</button>
+              <button type="button" class="btn-delete" id="gallerySelectDelete">Delete</button>
             </div>
           </div>
         <% } %>

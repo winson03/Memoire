@@ -7,6 +7,7 @@ const express = require('express');
 const multer = require('multer');
 const os = require('os');
 const fs = require('fs');
+const archiver = require('archiver');
 const router = express.Router();
 const { ensureAuth } = require('../middleware/auth');
 const { Gallery, Collections, Notifications } = require('../lib/queries');
@@ -91,6 +92,56 @@ router.post('/collections/:id/assign', (req, res) => {
   current.forEach((id) => { if (!selected.has(id)) Gallery.setCollection(id, null); });
 
   res.json({ ok: true });
+});
+
+// Bulk delete selected media (owner only).
+router.post('/bulk-delete', (req, res) => {
+  const ids = Array.isArray(req.body && req.body.ids)
+    ? req.body.ids.map((x) => parseInt(x, 10)).filter(Boolean)
+    : [];
+  const deleted = [];
+  ids.forEach((id) => {
+    const img = Gallery.findById(id);
+    if (img && img.user_id === req.user.id) {
+      storage.remove(img.telegram_file_id);
+      Gallery.remove(img.id);
+      deleted.push(id);
+    }
+  });
+  res.json({ ok: true, deleted });
+});
+
+// Bulk download selected media as a zip. Posted via a form (repeated `ids`
+// fields) so the browser handles the download natively — no JS buffering.
+router.post('/bulk-download', async (req, res) => {
+  const raw = req.body && req.body.ids;
+  const ids = (Array.isArray(raw) ? raw : [raw]).map((x) => parseInt(x, 10)).filter(Boolean);
+  const imgs = ids
+    .map((id) => Gallery.findById(id))
+    .filter((m) => m && m.user_id === req.user.id && m.telegram_file_id);
+  if (!imgs.length) return res.redirect('/gallery');
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="gallery-${Date.now()}.zip"`);
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', (err) => {
+    console.error('[gallery bulk-download]', err.message);
+    if (!res.headersSent) res.status(500);
+    res.end();
+  });
+  archive.pipe(res);
+  // One buffer at a time (the loop awaits) keeps peak memory to a single file.
+  for (let i = 0; i < imgs.length; i++) {
+    const m = imgs[i];
+    try {
+      const buf = await storage.fetchBuffer(m.telegram_file_id);
+      const base = m.file_name || `media-${i + 1}`;
+      archive.append(buf, { name: `${String(i + 1).padStart(3, '0')}-${base}` });
+    } catch (e) {
+      console.error('[gallery bulk-download] item', m.id, e.message);
+    }
+  }
+  archive.finalize();
 });
 
 // Move one media item into a collection (or none). AJAX from the tile select.

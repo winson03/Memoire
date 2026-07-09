@@ -1711,8 +1711,7 @@ function initGallery() {
     el.dataset.id = img.id;
     const isVideo = (img.mime || '').startsWith('video/');
     el.innerHTML =
-      `<button type="button" class="media-remove" data-del="${img.id}" title="Remove">×</button>` +
-      `<a class="media-download" href="${img.url}?download=1" download title="Download">↓</a>` +
+      '<span class="tile-check" aria-hidden="true">✓</span>' +
       (isVideo
         ? `<video src="${img.url}" muted preload="metadata"></video><div class="media-play">▶</div>`
         : `<img src="${img.url}?w=640" data-full="${img.url}" alt="" loading="lazy">`);
@@ -1766,14 +1765,70 @@ function initGallery() {
     });
   }
 
-  grid.addEventListener('click', async (e) => {
-    const del = e.target.closest('[data-del]');
-    if (del) {
-      e.stopPropagation();
-      const tile = del.closest('.gallery-tile');
-      await fetch('/gallery/' + del.dataset.del + '/delete', { method: 'POST' });
-      tile.remove();
+  // ── Bulk select: download / delete several images at once ──────────────────
+  const selectBtn = document.getElementById('gallerySelectBtn');
+  const selectBar = document.getElementById('gallerySelectBar');
+  const selectCount = document.getElementById('gallerySelectCount');
+  const selectedTiles = () => grid.querySelectorAll('.gallery-tile.selected');
+  const selectedIds = () => [...selectedTiles()].map((t) => t.dataset.id);
+
+  function updateSelect() {
+    const n = selectedTiles().length;
+    if (selectCount) selectCount.textContent = `${n} ${n === 1 ? 'image' : 'images'} selected`;
+  }
+  function exitSelect() {
+    grid.classList.remove('select-mode');
+    selectedTiles().forEach((t) => t.classList.remove('selected'));
+    if (selectBar) selectBar.hidden = true;
+  }
+  if (selectBtn) selectBtn.addEventListener('click', () => {
+    grid.classList.add('select-mode');
+    if (selectBar) selectBar.hidden = false;
+    updateSelect();
+  });
+  const selCancel = document.getElementById('gallerySelectCancel');
+  if (selCancel) selCancel.addEventListener('click', exitSelect);
+
+  const selDownload = document.getElementById('gallerySelectDownload');
+  if (selDownload) selDownload.addEventListener('click', () => {
+    const ids = selectedIds();
+    if (!ids.length) return;
+    // Native download via a form → hidden iframe, so the page isn't disturbed.
+    let frame = document.getElementById('bulkDlFrame');
+    if (!frame) { frame = document.createElement('iframe'); frame.name = 'bulkDlFrame'; frame.id = 'bulkDlFrame'; frame.style.display = 'none'; document.body.appendChild(frame); }
+    const form = document.createElement('form');
+    form.method = 'POST'; form.action = '/gallery/bulk-download'; form.target = 'bulkDlFrame'; form.style.display = 'none';
+    ids.forEach((id) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = 'ids'; i.value = id; form.appendChild(i); });
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+  });
+
+  const selDelete = document.getElementById('gallerySelectDelete');
+  if (selDelete) selDelete.addEventListener('click', async () => {
+    const ids = selectedIds();
+    if (!ids.length) return;
+    if (!window.confirm(`Delete ${ids.length} ${ids.length === 1 ? 'image' : 'images'}? This can't be undone.`)) return;
+    selDelete.disabled = true;
+    try {
+      await fetch('/gallery/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      selectedTiles().forEach((t) => t.remove());
       if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
+      exitSelect();
+    } finally {
+      selDelete.disabled = false;
+    }
+  });
+
+  grid.addEventListener('click', (e) => {
+    // In select mode, tapping a tile toggles its selection instead of zooming.
+    if (grid.classList.contains('select-mode')) {
+      const tile = e.target.closest('.gallery-tile');
+      if (tile) { e.preventDefault(); tile.classList.toggle('selected'); updateSelect(); }
       return;
     }
     const clicked = e.target.closest('.gallery-tile img, .gallery-tile video');
