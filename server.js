@@ -5,6 +5,7 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
+const compression = require('compression');
 const session = require('express-session');
 const SqliteStore = require('better-sqlite3-session-store')(session);
 const flash = require('connect-flash');
@@ -49,6 +50,10 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'same-origin' },
   hsts: IS_PROD,
 }));
+
+// gzip/brotli text responses (HTML/CSS/JS/JSON). The built-in filter skips
+// already-compressed media (images/video), so streaming/range stays untouched.
+app.use(compression());
 
 // ── View engine ──────────────────────────────────────────────────────────────
 app.set('view engine', 'ejs');
