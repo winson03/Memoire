@@ -1678,14 +1678,13 @@ function initReaderFigWindow() {
 function initGallery() {
   const grid = document.getElementById('galleryGrid');
   if (!grid) return;
+  if (grid.dataset.assign) return initGalleryAssign(grid); // bulk-assign mode
   const input = document.getElementById('galleryInput');
   const btn = document.getElementById('galleryUploadBtn');
   const empty = document.getElementById('galleryEmpty');
   const progress = document.getElementById('galleryProgress');
   const newestFirst = grid.dataset.order !== 'oldest';
   const activeCollection = grid.dataset.collection || '';
-  let collections = [];
-  try { collections = JSON.parse(grid.dataset.collections || '[]'); } catch (_) { /* none */ }
 
   // Show the "swipe for more →" fade on the collection strip only when its
   // tabs actually overflow (so a few collections stay snug, not stretched).
@@ -1706,45 +1705,6 @@ function initGallery() {
     progress.textContent = `Uploading ${done}/${total}${eta ? ` · ${eta.text()}` : ''}…`;
   }
 
-  function collectButton(imgId, currentId) {
-    if (!collections.length) return '';
-    return `<button type="button" class="tile-collect" data-collect="${imgId}" data-current="${currentId || ''}" title="Move to collection">⇄</button>`;
-  }
-
-  // Tap-friendly chooser dialog for moving a tile into a collection.
-  function openCollectionChooser(imgId, currentId, onMoved) {
-    const backdrop = document.createElement('div');
-    backdrop.className = 'dialog-backdrop';
-    const opts = [{ id: '', name: 'No collection' }].concat(collections);
-    backdrop.innerHTML = `
-      <div class="dialog-card" role="dialog" aria-modal="true">
-        <h3>Move to collection</h3>
-        <div class="chooser">
-          ${opts.map((c) => {
-            const cur = String(c.id) === String(currentId || '');
-            return `<button type="button" class="chooser-opt ${cur ? 'current' : ''}" data-id="${c.id}">${escapeHtml(c.name)}${cur ? ' ✓' : ''}</button>`;
-          }).join('')}
-        </div>
-        <div class="dialog-actions">
-          <button type="button" class="dialog-cancel">Cancel</button>
-        </div>
-      </div>`;
-    document.body.appendChild(backdrop);
-    const close = () => backdrop.remove();
-    backdrop.addEventListener('click', close);
-    backdrop.querySelector('.dialog-card').addEventListener('click', (e) => e.stopPropagation());
-    backdrop.querySelector('.dialog-cancel').addEventListener('click', close);
-    backdrop.querySelectorAll('.chooser-opt').forEach((b) => b.addEventListener('click', async () => {
-      await fetch('/gallery/' + imgId + '/collection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ collection_id: b.dataset.id }),
-      });
-      close();
-      onMoved(b.dataset.id);
-    }));
-  }
-
   function addTile(img) {
     const el = document.createElement('div');
     el.className = 'gallery-tile';
@@ -1753,7 +1713,6 @@ function initGallery() {
     el.innerHTML =
       `<button type="button" class="media-remove" data-del="${img.id}" title="Remove">×</button>` +
       `<a class="media-download" href="${img.url}?download=1" download title="Download">↓</a>` +
-      collectButton(img.id, activeCollection) +
       (isVideo
         ? `<video src="${img.url}" muted preload="metadata"></video><div class="media-play">▶</div>`
         : `<img src="${img.url}?w=640" data-full="${img.url}" alt="" loading="lazy">`);
@@ -1808,21 +1767,6 @@ function initGallery() {
   }
 
   grid.addEventListener('click', async (e) => {
-    // "⇄" → chooser dialog; drop the tile from view when it leaves the
-    // currently filtered collection.
-    const collect = e.target.closest('[data-collect]');
-    if (collect) {
-      e.stopPropagation();
-      const tile = collect.closest('.gallery-tile');
-      openCollectionChooser(collect.dataset.collect, collect.dataset.current, (newId) => {
-        collect.dataset.current = newId;
-        if (activeCollection && newId !== activeCollection) {
-          tile.remove();
-          if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
-        }
-      });
-      return;
-    }
     const del = e.target.closest('[data-del]');
     if (del) {
       e.stopPropagation();
@@ -1840,6 +1784,43 @@ function initGallery() {
         items.indexOf(clicked),
         (end) => { if (items[end]) items[end].scrollIntoView({ block: 'center' }); }
       );
+    }
+  });
+}
+
+// Gallery bulk-assign mode: tap tiles to toggle selection (no lightbox), then
+// Save posts the full selected set as the collection's membership.
+function initGalleryAssign(grid) {
+  const collId = grid.dataset.collection;
+  const countEl = document.getElementById('assignCount');
+  const saveBtn = document.getElementById('assignSave');
+
+  const update = () => {
+    const n = grid.querySelectorAll('.gallery-tile.selected').length;
+    if (countEl) countEl.textContent = `${n} ${n === 1 ? 'image' : 'images'} selected`;
+  };
+
+  grid.addEventListener('click', (e) => {
+    const tile = e.target.closest('.gallery-tile');
+    if (!tile) return;
+    e.preventDefault();
+    tile.classList.toggle('selected');
+    update();
+  });
+  update();
+
+  if (saveBtn) saveBtn.addEventListener('click', async () => {
+    const ids = [...grid.querySelectorAll('.gallery-tile.selected')].map((t) => t.dataset.id);
+    saveBtn.disabled = true;
+    try {
+      await fetch('/gallery/collections/' + collId + '/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      window.location.href = '/gallery?collection=' + collId; // back to the collection
+    } catch (_) {
+      saveBtn.disabled = false;
     }
   });
 }

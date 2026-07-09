@@ -7,51 +7,66 @@
       <div class="page">
 
         <% var collQ = activeCollection ? ('&collection=' + activeCollection.id) : ''; %>
-        <div class="gallery-tabs">
-          <div class="sort-toggle">
-            <a href="/gallery?order=<%= order %>" class="<%= !activeCollection ? 'active' : '' %>">All</a>
-            <% collections.forEach(function(c){ %>
-              <a href="/gallery?order=<%= order %>&collection=<%= c.id %>" class="<%= activeCollection && activeCollection.id === c.id ? 'active' : '' %>"><%= c.name %><span class="tab-count"><%= collectionCounts[c.id] || 0 %></span></a>
-            <% }) %>
+        <% if (assignMode) { %>
+          <div class="assign-head">
+            <div>
+              <div class="assign-title">Assign images to “<%= activeCollection.name %>”</div>
+              <div class="assign-hint">Tap images to select. Ones already in this collection are pre-selected — untap to remove them.</div>
+            </div>
+            <a class="btn btn-soft" href="/gallery?order=<%= order %><%= collQ %>">Cancel</a>
           </div>
-          <button class="btn btn-soft" style="padding:8px 14px;border-radius:100px;font-size:13px;"
-                  data-create-dialog
-                  data-title="New collection"
-                  data-label="Collection name"
-                  data-existing="<%= JSON.stringify(collections.map(function(c){ return c.name; })) %>"
-                  data-action="/gallery/collections">+ New collection</button>
-          <% if (activeCollection) { %>
-            <form action="/gallery/collections/<%= activeCollection.id %>/delete" method="post" style="margin:0;">
-              <button type="submit" class="btn-delete"
-                      data-confirm
-                      data-title="Delete collection?"
-                      data-body="Deleting “<%= activeCollection.name %>” keeps its media — they go back to All.">Delete collection</button>
-            </form>
-          <% } %>
-        </div>
+        <% } else { %>
+          <div class="gallery-tabs">
+            <div class="sort-toggle">
+              <a href="/gallery?order=<%= order %>" class="<%= !activeCollection ? 'active' : '' %>">All</a>
+              <% collections.forEach(function(c){ %>
+                <a href="/gallery?order=<%= order %>&collection=<%= c.id %>" class="<%= activeCollection && activeCollection.id === c.id ? 'active' : '' %>"><%= c.name %><span class="tab-count"><%= collectionCounts[c.id] || 0 %></span></a>
+              <% }) %>
+            </div>
+            <button class="btn btn-soft" style="padding:8px 14px;border-radius:100px;font-size:13px;"
+                    data-create-dialog
+                    data-title="New collection"
+                    data-label="Collection name"
+                    data-existing="<%= JSON.stringify(collections.map(function(c){ return c.name; })) %>"
+                    data-action="/gallery/collections">+ New collection</button>
+            <% if (activeCollection) { %>
+              <form action="/gallery/collections/<%= activeCollection.id %>/delete" method="post" style="margin:0;">
+                <button type="submit" class="btn-delete"
+                        data-confirm
+                        data-title="Delete collection?"
+                        data-body="Deleting “<%= activeCollection.name %>” keeps its media — they go back to All.">Delete collection</button>
+              </form>
+            <% } %>
+          </div>
 
-        <div class="gallery-bar">
-          <div class="sort-toggle">
-            <a href="/gallery?order=newest<%= collQ %>" class="<%= order === 'newest' ? 'active' : '' %>">Newest first</a>
-            <a href="/gallery?order=oldest<%= collQ %>" class="<%= order === 'oldest' ? 'active' : '' %>">Oldest first</a>
+          <div class="gallery-bar">
+            <div class="sort-toggle">
+              <a href="/gallery?order=newest<%= collQ %>" class="<%= order === 'newest' ? 'active' : '' %>">Newest first</a>
+              <a href="/gallery?order=oldest<%= collQ %>" class="<%= order === 'oldest' ? 'active' : '' %>">Oldest first</a>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <% if (activeCollection) { %>
+                <a class="btn btn-soft" href="/gallery?order=<%= order %><%= collQ %>&assign=1">Assign images</a>
+              <% } %>
+              <span id="galleryProgress" class="upload-progress" hidden></span>
+              <button type="button" class="btn btn-accent" id="galleryUploadBtn">+ Add media</button>
+            </div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span id="galleryProgress" class="upload-progress" hidden></span>
-            <button type="button" class="btn btn-accent" id="galleryUploadBtn">+ Add media</button>
-          </div>
-        </div>
+        <% } %>
 
         <input type="file" id="galleryInput" accept="image/*,video/*" multiple hidden>
 
-        <div class="gallery-grid" id="galleryGrid" data-order="<%= order %>"
+        <div class="gallery-grid <%= assignMode ? 'select-mode' : '' %>" id="galleryGrid" data-order="<%= order %>"
              data-collection="<%= activeCollection ? activeCollection.id : '' %>"
-             data-collections="<%- JSON.stringify(collections.map(function(c){ return { id: c.id, name: c.name }; })).replace(/"/g, '&quot;') %>">
+             <% if (assignMode) { %>data-assign="1"<% } %>>
           <% images.forEach(function(img){ %>
-            <div class="gallery-tile" data-id="<%= img.id %>">
-              <button type="button" class="media-remove" data-del="<%= img.id %>" title="Remove">×</button>
-              <a class="media-download" href="/gallery/<%= img.id %>/raw?download=1" download title="Download">↓</a>
-              <% if (collections.length) { %>
-                <button type="button" class="tile-collect" data-collect="<%= img.id %>" data-current="<%= img.collection_id || '' %>" title="Move to collection">⇄</button>
+            <% var inColl = assignMode && img.collection_id === activeCollection.id; %>
+            <div class="gallery-tile <%= inColl ? 'selected' : '' %>" data-id="<%= img.id %>">
+              <% if (assignMode) { %>
+                <span class="tile-check" aria-hidden="true">✓</span>
+              <% } else { %>
+                <button type="button" class="media-remove" data-del="<%= img.id %>" title="Remove">×</button>
+                <a class="media-download" href="/gallery/<%= img.id %>/raw?download=1" download title="Download">↓</a>
               <% } %>
               <% if ((img.mime || '').startsWith('video/')) { %>
                 <video src="/gallery/<%= img.id %>/raw" muted preload="metadata"></video>
@@ -62,6 +77,16 @@
             </div>
           <% }) %>
         </div>
+
+        <% if (assignMode) { %>
+          <div class="assign-bar" id="assignBar">
+            <span class="assign-count" id="assignCount"></span>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <a class="btn btn-soft" href="/gallery?order=<%= order %><%= collQ %>">Cancel</a>
+              <button type="button" class="btn btn-accent" id="assignSave">Save</button>
+            </div>
+          </div>
+        <% } %>
 
         <div class="empty" id="galleryEmpty" <%= images.length ? 'hidden' : '' %>>
           <div class="ico">▦</div>

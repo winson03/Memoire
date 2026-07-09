@@ -32,16 +32,21 @@ const upload = multer({
 router.use(ensureAuth);
 
 // Gallery page. ?collection=<id> filters to one collection ("All" otherwise).
+// ?assign=1 (with a collection) enters bulk-assign mode: show ALL images so the
+// user can multi-select which ones belong to the collection.
 router.get('/', (req, res) => {
   const order = req.query.order === 'oldest' ? 'oldest' : 'newest';
   const activeCollection = ownCollection(req, req.query.collection);
-  const images = Gallery.listForUser(req.user.id, order, activeCollection ? activeCollection.id : null);
+  const assignMode = !!(req.query.assign && activeCollection);
+  const listCollectionId = assignMode ? null : (activeCollection ? activeCollection.id : null);
+  const images = Gallery.listForUser(req.user.id, order, listCollectionId);
   res.render('gallery', {
     images,
     order,
     collections: Collections.listForUser(req.user.id),
     activeCollection,
     collectionCounts: Gallery.countsByCollection(req.user.id),
+    assignMode,
   });
 });
 
@@ -60,6 +65,32 @@ router.post('/collections/:id/delete', (req, res) => {
   const coll = ownCollection(req, req.params.id);
   if (coll) Collections.remove(coll.id);
   res.redirect('/gallery');
+});
+
+// Bulk-set a collection's membership from the in-page multi-select. The posted
+// ids become the full membership: newly-selected images are added, and images
+// that were in the collection but got deselected go back to "All".
+router.post('/collections/:id/assign', (req, res) => {
+  const coll = ownCollection(req, req.params.id);
+  if (!coll) return res.status(404).json({ error: 'not found' });
+  const ids = Array.isArray(req.body && req.body.ids)
+    ? req.body.ids.map((x) => parseInt(x, 10)).filter(Boolean)
+    : [];
+  const selected = new Set(ids);
+  const current = Gallery.listForUser(req.user.id, 'newest', coll.id).map((i) => i.id);
+  const currentSet = new Set(current);
+
+  // Add newly-selected images the user owns that aren't already in the collection.
+  selected.forEach((id) => {
+    if (!currentSet.has(id)) {
+      const img = Gallery.findById(id);
+      if (img && img.user_id === req.user.id) Gallery.setCollection(id, coll.id);
+    }
+  });
+  // Remove images that were in the collection but are no longer selected.
+  current.forEach((id) => { if (!selected.has(id)) Gallery.setCollection(id, null); });
+
+  res.json({ ok: true });
 });
 
 // Move one media item into a collection (or none). AJAX from the tile select.

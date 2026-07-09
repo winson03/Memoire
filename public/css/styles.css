@@ -343,16 +343,23 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .gallery-tabs { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .gallery-tabs .sort-toggle { flex-wrap: wrap; }
 .gallery-tabs .tab-count { margin-left: 7px; font-size: 11px; font-weight: 600; opacity: 0.65; }
-.tile-collect { position: absolute; left: 8px; bottom: 8px; width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); color: #fff; font-size: 13px; line-height: 1; border: none; cursor: pointer; z-index: 3; backdrop-filter: blur(4px); opacity: 0; transition: opacity .15s, background .15s; }
-.gallery-tile:hover .tile-collect, .gallery-tile:focus-within .tile-collect { opacity: 1; }
-.tile-collect:hover { background: rgba(0,0,0,0.72); }
-.chooser { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 4px; max-height: 45vh; overflow-y: auto; }
-.chooser-opt { text-align: left; padding: 11px 14px; border-radius: 10px; border: 1px solid rgba(58,50,42,0.14); background: rgba(255,255,255,0.65); font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; transition: border-color .15s, background .15s; }
-.chooser-opt:hover { border-color: var(--accent); background: rgba(194,104,62,0.08); }
-.chooser-opt.current { border-color: var(--accent); color: var(--accent); }
+/* Gallery bulk-assign: tap tiles to select which belong to a collection. */
+.assign-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+.assign-title { font-family: var(--head-font); font-size: 20px; color: var(--ink); }
+.assign-hint { font-size: 13px; color: rgba(58,50,42,0.55); margin-top: 4px; max-width: 520px; }
+.gallery-grid.select-mode .gallery-tile,
+.gallery-grid.select-mode .gallery-tile img,
+.gallery-grid.select-mode .gallery-tile video { cursor: pointer; }
+.gallery-grid.select-mode .gallery-tile:not(.selected) img,
+.gallery-grid.select-mode .gallery-tile:not(.selected) video { opacity: 0.72; }
+.gallery-tile.selected { outline: 3px solid var(--accent); outline-offset: -3px; }
+.tile-check { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; z-index: 3; color: transparent; background: rgba(0,0,0,0.32); border: 2px solid rgba(255,255,255,0.9); }
+.gallery-tile.selected .tile-check { color: #fff; background: var(--accent); }
+.assign-bar { position: sticky; bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 20px; padding: 13px 18px; background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.85); border-radius: 14px; box-shadow: 0 12px 32px rgba(120,80,50,0.14); }
+.assign-count { font-size: 14px; font-weight: 600; color: var(--ink); }
 /* Touch screens have no hover — keep tile actions visible. */
 @media (hover: none) {
-  .gallery-tile .media-remove, .gallery-tile .tile-collect { opacity: 1; }
+  .gallery-tile .media-remove { opacity: 1; }
 }
 /* Small screens: collections become one swipeable row instead of a stack. */
 @media (max-width: 640px) {
