@@ -357,9 +357,10 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .gallery-tile.selected .tile-check { color: #fff; background: var(--accent); }
 .assign-bar { position: sticky; bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 20px; padding: 13px 18px; background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.85); border-radius: 14px; box-shadow: 0 12px 32px rgba(120,80,50,0.14); }
 .assign-count { font-size: 14px; font-weight: 600; color: var(--ink); }
-/* Touch screens have no hover — keep tile actions visible. */
+/* Touch screens have no hover — keep tile actions visible so the first tap opens
+   the image (a hover-revealed control would otherwise swallow the first tap). */
 @media (hover: none) {
-  .gallery-tile .media-remove { opacity: 1; }
+  .gallery-tile .media-remove, .gallery-tile .media-download { opacity: 1; }
 }
 /* Small screens: collections become one swipeable row instead of a stack. */
 @media (max-width: 640px) {
