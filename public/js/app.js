@@ -495,6 +495,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reader: keep only the photos near the viewport loaded (memory-bounded).
   initReaderFigWindow();
 
+  // "Back" links return to the previous in-app page (the folder, library,
+  // favourites, … you came from) rather than a fixed page. Referrer-Policy is
+  // no-referrer, so the server can't know the origin — use history instead. The
+  // href stays as a fallback for direct loads (no history) and no-JS.
+  document.querySelectorAll('a[data-back]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      if (window.history.length > 1) { e.preventDefault(); window.history.back(); }
+    });
+  });
+
   // Folder view: per-folder story sorting (remembered per folder).
   initFolderSort();
 
