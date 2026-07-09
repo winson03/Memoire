@@ -183,6 +183,27 @@ router.post('/stories/import', (req, res) => {
   res.json({ id: book.id });
 });
 
+// ── Folder import: record a "import finished" bell notification ────────────────
+// The import runs entirely in the browser (media uploads go straight to Drive),
+// so the client reports the totals once the whole batch is done. Mirrors the
+// per-story media upload notification.
+router.post('/stories/import/notify-complete', (req, res) => {
+  const stories = Math.max(0, parseInt(req.body && req.body.stories, 10) || 0);
+  const photos = Math.max(0, parseInt(req.body && req.body.photos, 10) || 0);
+  if (!stories) return res.json({ ok: true });
+
+  const folderId = req.body && req.body.folder_id ? parseInt(req.body.folder_id, 10) : null;
+  const folder = folderId ? Folders.findById(folderId) : null;
+  const dest = folder && folder.user_id === req.user.id ? folder : null;
+
+  const s = `${stories} ${stories === 1 ? 'story' : 'stories'}`;
+  const p = `${photos} ${photos === 1 ? 'photo' : 'photos'}`;
+  const message = `Imported ${s}${photos ? ` · ${p}` : ''}${dest ? ` into “${dest.name}”` : ''}`;
+  Notifications.create({ user_id: req.user.id, type: 'upload', book_id: null, message });
+
+  res.json({ ok: true, notification: { message, href: dest ? '/folders?open=' + dest.id : '/library' } });
+});
+
 // ── Create / Update story ─────────────────────────────────────────────────────
 router.post('/stories/:id', (req, res) => {
   const book = Books.findById(parseInt(req.params.id, 10));

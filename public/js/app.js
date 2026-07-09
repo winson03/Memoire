@@ -1026,6 +1026,7 @@ function initFolderImport() {
   async function importGroups(groups, folderId) {
     const eta = makeUploadEta(groups.flatMap((g) => g.files));
     let storyNo = 0;
+    let storiesDone = 0, photosDone = 0; // totals for the completion notification
     const label = () => `Importing story ${storyNo}/${groups.length} · ${eta.text()}…`;
     const ticker = setInterval(() => show(label()), 1000);
     try {
@@ -1042,6 +1043,7 @@ function initFolderImport() {
           if (createRes.ok) id = (await createRes.json()).id;
         } catch (_) { /* fall through */ }
         if (!id) { g.files.forEach((f) => eta.fileDone(f)); continue; } // skip folder, keep ETA honest
+        storiesDone += 1;
 
         // Upload the folder's files, 3 at a time, remembering each media id.
         const ids = new Array(g.files.length).fill(null);
@@ -1082,6 +1084,7 @@ function initFolderImport() {
 
         // Uploads finish out of order — persist the by-name order.
         const order = ids.filter((x) => x != null);
+        photosDone += order.length;
         if (order.length > 1) {
           await fetch(`/stories/${id}/media/reorder`, {
             method: 'POST',
@@ -1094,6 +1097,17 @@ function initFolderImport() {
       clearInterval(ticker);
     }
     show('');
+    // Record a bell notification summarising the import (like media uploads).
+    // The page reloads next, so the persisted notification shows in the bell.
+    if (storiesDone > 0) {
+      try {
+        await fetch('/stories/import/notify-complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stories: storiesDone, photos: photosDone, folder_id: folderId }),
+        });
+      } catch (_) { /* best-effort; nothing to show if it fails */ }
+    }
     location.reload(); // show the new stories
   }
 
