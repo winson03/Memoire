@@ -55,7 +55,7 @@
                     <p><%= b.value %></p>
                   <% } else if (b.type === 'image') { %>
                     <figure class="story-img">
-                      <img src="/media/<%= b.mediaId %>" alt="" loading="lazy">
+                      <img src="/media/<%= b.mediaId %>?w=1280" data-full="/media/<%= b.mediaId %>" alt="" loading="lazy" decoding="async">
                       <% if (b.caption) { %><figcaption><%= b.caption %></figcaption><% } %>
                     </figure>
                   <% } %>
@@ -78,7 +78,7 @@
               <% photos.forEach(function(m){ %>
                 <figure>
                   <% if (m.telegram_file_id && m.kind === 'photo') { %>
-                    <div class="photo-frame"><img src="/media/<%= m.id %>" alt="<%= m.label || '' %>" loading="lazy"></div>
+                    <div class="photo-frame"><img src="/media/<%= m.id %>?w=1280" data-full="/media/<%= m.id %>" alt="<%= m.label || '' %>" loading="lazy" decoding="async"></div>
                   <% } else if (m.telegram_file_id && m.kind === 'video') { %>
                     <div class="photo-frame"><video src="/media/<%= m.id %>" controls preload="metadata"></video></div>
                   <% } else if (m.telegram_file_id && m.kind === 'pdf') { %>

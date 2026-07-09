@@ -571,7 +571,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const gallery = figImgs.map((img) => {
       const fig = img.closest('figure');
       const fc = fig && fig.querySelector('figcaption');
-      return { src: img.getAttribute('src'), caption: ((fc && fc.textContent) || '').trim() };
+      // Tiles load a downscaled ?w= preview; the lightbox opens the full-res
+      // original (data-full) so only the one on screen is decoded at full size.
+      return { src: img.dataset.full || img.getAttribute('src'), caption: ((fc && fc.textContent) || '').trim() };
     });
     figImgs.forEach((img, idx) => {
       img.style.cursor = 'zoom-in';
