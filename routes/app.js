@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const { ensureAuth, ensureAdmin } = require('../middleware/auth');
-const { Users, Books, Folders, Collections, Favourites, Notifications, Media } = require('../lib/queries');
+const { Users, Books, Folders, Collections, Favourites, Notifications, Media, Gallery } = require('../lib/queries');
 const { greeting, firstName, storageStats } = require('../lib/view-helpers');
 const { statusLabel, readersTxt } = require('../lib/themes');
 const storage = require('../lib/storage');
@@ -96,17 +96,60 @@ router.get('/dashboard', (req, res) => {
   });
 });
 
-// ── Library (all of your own stories, paginated) ──────────────────────────────
+// ── Library (your stories + gallery photos, grouped by folder/collection) ─────
+// Folders (which group stories) and gallery collections (which group photos)
+// are merged into one set of tabs, keyed by name (case-insensitive). A folder
+// and a collection that share a name become a single combined tab showing both
+// its stories and its photos; a name that exists on only one side gets its own
+// tab. The "All" tab shows everything.
 router.get('/library', (req, res) => {
+  const u = req.user;
   const q = req.query.q || '';
-  const perPage = 10;
-  const all = filt(Books.listByUser(req.user.id), q).sort((a, b) => b.id - a.id);
-  const total = all.length;
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
-  const books = all.slice((page - 1) * perPage, page * perPage);
-  // Folder list feeds the bulk-import popup's "add to folder" dropdown.
-  res.render('library', { books, page, totalPages, total, query: q, folders: Folders.listForUser(req.user.id) });
+  const norm = (s) => (s || '').trim().toLowerCase();
+
+  const books = Books.listByUser(u.id);
+  const folders = Folders.listForUser(u.id);
+  const collections = Collections.listForUser(u.id);
+  const allImages = Gallery.listForUser(u.id, 'newest');
+
+  // Union folders + collections into tabs keyed by normalised name.
+  const tabMap = new Map();
+  const ensure = (name) => {
+    const k = norm(name);
+    if (!tabMap.has(k)) tabMap.set(k, { key: k, name, folderIds: [], collectionIds: [] });
+    return tabMap.get(k);
+  };
+  folders.forEach((f) => ensure(f.name).folderIds.push(f.id));
+  collections.forEach((c) => ensure(c.name).collectionIds.push(c.id));
+
+  const booksIn = (ids) => books.filter((b) => ids.includes(b.folder_id));
+  const imagesIn = (ids) => allImages.filter((i) => ids.includes(i.collection_id));
+
+  // Active tab from ?tab=<name> (normalised); missing/unknown → the "All" tab.
+  const active = req.query.tab != null ? (tabMap.get(norm(req.query.tab)) || null) : null;
+
+  const tabs = [...tabMap.values()].map((t) => ({
+    name: t.name,
+    storyCount: booksIn(t.folderIds).length,
+    photoCount: imagesIn(t.collectionIds).length,
+    active: active ? active.key === t.key : false,
+    href: '/library?tab=' + encodeURIComponent(t.name),
+  }));
+
+  const stories = active ? booksIn(active.folderIds) : books;
+  const images = active ? imagesIn(active.collectionIds) : allImages;
+  const shownStories = filt(stories, q).sort((a, b) => b.id - a.id); // newest first
+
+  res.render('library', {
+    tabs,
+    activeTab: active ? { name: active.name } : null,
+    allActive: !active,
+    allCount: books.length + allImages.length,
+    stories: shownStories,
+    images,
+    query: q,
+    folders, // feeds the bulk-import popup's "add to folder" dropdown
+  });
 });
 
 // ── Discover (all published stories, paginated) ───────────────────────────────

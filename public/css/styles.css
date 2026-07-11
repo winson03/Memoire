@@ -347,6 +347,10 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .gallery-tabs { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .gallery-tabs .sort-toggle { flex-wrap: wrap; }
 .gallery-tabs .tab-count { margin-left: 7px; font-size: 11px; font-weight: 600; opacity: 0.65; }
+/* Library: gallery photos sit in the same grid as story covers. Top-align so a
+   square photo next to a taller cover card doesn't stretch, and give it the same
+   3/4 card shape as the covers for a uniform grid. */
+.cover-grid .gallery-tile { align-self: start; aspect-ratio: 3 / 4; border-radius: 15px; }
 /* Gallery bulk-assign: tap tiles to select which belong to a collection. */
 .assign-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
 .assign-title { font-family: var(--head-font); font-size: 20px; color: var(--ink); }

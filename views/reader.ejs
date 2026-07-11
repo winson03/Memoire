@@ -80,7 +80,7 @@
                   <% if (m.telegram_file_id && m.kind === 'photo') { %>
                     <div class="photo-frame"><img data-full="/media/<%= m.id %>" alt="<%= m.label || '' %>" decoding="async"></div>
                   <% } else if (m.telegram_file_id && m.kind === 'video') { %>
-                    <div class="photo-frame"><video src="/media/<%= m.id %>" controls preload="metadata"></video></div>
+                    <div class="photo-frame"><video src="/media/<%= m.id %>#t=0.1" controls preload="metadata"></video></div>
                   <% } else if (m.telegram_file_id && m.kind === 'pdf') { %>
                     <div class="photo-frame pdf"><iframe src="/media/<%= m.id %>" title="<%= m.label || 'document' %>"></iframe></div>
                   <% } else if (m.telegram_file_id) { %>

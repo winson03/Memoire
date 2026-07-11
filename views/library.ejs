@@ -6,8 +6,22 @@
     <div class="content">
       <div class="page">
 
+        <!-- Tabs: All + one per folder / gallery collection name (matched names merge). -->
+        <div class="gallery-tabs">
+          <div class="sort-toggle">
+            <a href="/library" class="<%= allActive ? 'active' : '' %>">All<span class="tab-count"><%= allCount %></span></a>
+            <% tabs.forEach(function(t){ %>
+              <a href="<%= t.href %>" class="<%= t.active ? 'active' : '' %>"><%= t.name %><span class="tab-count"><%= t.storyCount + t.photoCount %></span></a>
+            <% }) %>
+          </div>
+        </div>
+
         <p class="muted-line">
-          <%= total %> <%= total === 1 ? 'story' : 'stories' %> in your library<%= query ? (' matching “' + query + '”') : '' %>.
+          <% if (query) { %>
+            <%= stories.length %> <%= stories.length === 1 ? 'story' : 'stories' %> matching “<%= query %>”<%= activeTab ? (' in “' + activeTab.name + '”') : '' %>.
+          <% } else { %>
+            <%= stories.length %> <%= stories.length === 1 ? 'story' : 'stories' %><% if (images.length) { %> · <%= images.length %> <%= images.length === 1 ? 'photo' : 'photos' %><% } %><%= activeTab ? (' in “' + activeTab.name + '”') : ' in your library' %>.
+          <% } %>
         </p>
 
         <div class="panel" id="importDropzone" style="padding:16px 18px;margin-bottom:18px;">
@@ -18,29 +32,32 @@
         <input type="file" id="importFolderInput" webkitdirectory directory multiple hidden>
         <script type="application/json" id="importFoldersData"><%- JSON.stringify(folders.map(function(f){ return { id: f.id, name: f.name }; })).replace(/</g, '\\u003c') %></script>
 
-        <% if (books.length) { %>
-          <div class="cover-grid">
-            <% books.forEach(function(book){ %>
-              <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'status-meta' } }) %>
-            <% }) %>
-          </div>
-
-          <% if (totalPages > 1) { %>
-            <% var qs = function(p){ return '/library?page=' + p + (query ? ('&q=' + encodeURIComponent(query)) : ''); }; %>
-            <nav class="pager">
-              <% if (page > 1) { %><a class="pager-btn" href="<%= qs(page - 1) %>">← Prev</a><% } else { %><span class="pager-btn disabled">← Prev</span><% } %>
-              <% for (var p = 1; p <= totalPages; p++) { %>
-                <% if (p === page) { %><span class="pager-num active"><%= p %></span><% } else { %><a class="pager-num" href="<%= qs(p) %>"><%= p %></a><% } %>
-              <% } %>
-              <% if (page < totalPages) { %><a class="pager-btn" href="<%= qs(page + 1) %>">Next →</a><% } else { %><span class="pager-btn disabled">Next →</span><% } %>
-            </nav>
-            <div class="pager-info">Page <%= page %> of <%= totalPages %></div>
-          <% } %>
-        <% } else { %>
+        <% if (!stories.length && !images.length) { %>
           <div class="empty">
             <div class="ico">✦</div>
-            <div class="et"><%= query ? 'No matching stories' : 'Your library is empty' %></div>
-            <div class="eh"><%= query ? 'Try a different search.' : 'Start your first story to see it here.' %></div>
+            <div class="et"><%= query ? 'No matching stories' : (activeTab ? ('Nothing in “' + activeTab.name + '” yet') : 'Your library is empty') %></div>
+            <div class="eh"><%= query ? 'Try a different search.' : 'Start your first story, or add photos in the gallery, to see them here.' %></div>
+          </div>
+        <% } %>
+
+        <!-- Stories and photos combined in one grid. Photos are view-only here;
+             uploading/managing them lives on the /gallery page. -->
+        <% var showPhotos = images.length && !query; %>
+        <% if (stories.length || showPhotos) { %>
+          <div class="cover-grid" id="libraryCombined">
+            <% stories.forEach(function(book){ %>
+              <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'status-meta' } }) %>
+            <% }) %>
+            <% if (showPhotos) { images.forEach(function(img){ %>
+              <div class="gallery-tile lib-photo" data-id="<%= img.id %>">
+                <% if ((img.mime || '').startsWith('video/')) { %>
+                  <video src="/gallery/<%= img.id %>/raw#t=0.1" muted preload="metadata" data-full="/gallery/<%= img.id %>/raw"></video>
+                  <div class="media-play">▶</div>
+                <% } else { %>
+                  <img data-full="/gallery/<%= img.id %>/raw" alt="" loading="lazy">
+                <% } %>
+              </div>
+            <% }) } %>
           </div>
         <% } %>
 

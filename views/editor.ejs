@@ -162,7 +162,7 @@
                       <% if (m.telegram_file_id && m.kind === 'photo') { %>
                         <img src="/media/<%= m.id %>?w=640" alt="" draggable="false">
                       <% } else if (m.telegram_file_id && m.kind === 'video') { %>
-                        <video src="/media/<%= m.id %>" muted preload="metadata"></video>
+                        <video src="/media/<%= m.id %>#t=0.1" muted preload="metadata"></video>
                       <% } else { %>
                         <span class="media-kind"><%= (m.kind || 'file').toUpperCase() %></span>
                       <% } %>

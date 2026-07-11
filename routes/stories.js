@@ -44,9 +44,16 @@ router.get('/reader/:id', (req, res) => {
   const photos = Media.listForBook(book.id);
   // Only show other books by this author that are public (published) — or the
   // viewer's own — so private/draft stories never leak.
-  const moreByAuthor = Books.listByAuthor(book.author)
-    .filter((b) => b.id !== book.id && (b.status === 'published' || b.user_id === req.user.id))
-    .slice(0, 3);
+  const moreCandidates = Books.listByAuthor(book.author)
+    .filter((b) => b.id !== book.id && (b.status === 'published' || b.user_id === req.user.id));
+  // Shuffle before taking three — listByAuthor is ordered by id, so a plain
+  // slice would always surface the same oldest three regardless of the story
+  // being read. A Fisher–Yates shuffle keeps "More from {author}" varied.
+  for (let i = moreCandidates.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [moreCandidates[i], moreCandidates[j]] = [moreCandidates[j], moreCandidates[i]];
+  }
+  const moreByAuthor = moreCandidates.slice(0, 3);
   const faved = Favourites.idsForUser(req.user.id).includes(book.id);
 
   res.render('reader', { openBook: book, photos, moreByAuthor, faved, isOwner: ownerOnly(book, req), blocks: parseBlocks(book.content) });
@@ -214,6 +221,7 @@ router.post('/stories/:id', (req, res) => {
 
   const folderId = req.body.folder_id ? parseInt(req.body.folder_id, 10) : null;
   const folder = folderId ? Folders.findById(folderId) : null;
+  const ownFolder = folder && folder.user_id === req.user.id ? folder : null;
 
   Books.update(book.id, {
     title: (req.body.title || '').trim() || 'Untitled story',
@@ -221,9 +229,9 @@ router.post('/stories/:id', (req, res) => {
     status,
     theme: THEME_KEYS.includes(req.body.theme) ? req.body.theme : book.theme,
     cover_mode: req.body.cover_mode,
-    series: folder ? folder.name : (req.body.series || null),
+    series: ownFolder ? ownFolder.name : (req.body.series || null),
     collection: (req.body.collection || '').trim() || null,
-    folder_id: folder && folder.user_id === req.user.id ? folder.id : null,
+    folder_id: ownFolder ? ownFolder.id : null,
   });
 
   // Novels carry their written body inline in the editor form.
@@ -232,7 +240,10 @@ router.post('/stories/:id', (req, res) => {
   }
 
   req.flash('info', { published: 'Story published.', private: 'Saved privately.', draft: 'Draft saved.' }[status] || 'Story saved.');
-  res.redirect('/reader/' + book.id);
+  // A story filed in a folder returns to that folder (you came from there, and
+  // history-based "back" is unreliable across the create→edit redirect chain);
+  // an unfiled story opens in the reader.
+  res.redirect(ownFolder ? ('/folders?open=' + ownFolder.id) : ('/reader/' + book.id));
 });
 
 // ── Delete story ──────────────────────────────────────────────────────────────
@@ -372,7 +383,9 @@ router.post('/stories/:id/media', upload.single('file'), async (req, res) => {
       }
       if (pages && pages.length) {
         for (let i = 0; i < pages.length; i++) {
-          const rec = await storage.uploadBuffer(pages[i], `${baseLabel}-p${i + 1}.jpg`, 'image/jpeg');
+          // Keep PDF page images off Telegram — store them on Google Drive when
+          // it's connected (falls back to the default backend if it isn't).
+          const rec = await storage.uploadBuffer(pages[i], `${baseLabel}-p${i + 1}.jpg`, 'image/jpeg', { preferDrive: true });
           items.push(addMedia(rec, `${baseLabel} · p${i + 1}`));
         }
       } else {

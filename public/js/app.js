@@ -489,6 +489,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Standalone image gallery.
   initGallery();
 
+  // Library: view-only gallery photos merged into the folder tabs.
+  initLibraryGallery();
+
   // Reader: grid/list layout toggle for a photo story's images.
   initReaderFigs();
 
@@ -1455,7 +1458,7 @@ function initMedia() {
 
   function thumbInner(m) {
     if (m.kind === 'photo') return `<img src="/media/${m.id}?w=640" alt="" draggable="false">`;
-    if (m.kind === 'video') return `<video src="/media/${m.id}" muted preload="metadata"></video>`;
+    if (m.kind === 'video') return `<video src="/media/${m.id}#t=0.1" muted preload="metadata"></video>`;
     return `<span class="media-kind">${escapeHtml((m.kind || 'file').toUpperCase())}</span>`;
   }
 
@@ -1674,6 +1677,25 @@ function initReaderFigWindow() {
   if (body) windowImages(Array.from(body.querySelectorAll('img[data-full]')), () => 1080, null);
 }
 
+// ── Library: view-only gallery photos shown under the folder tabs ───────────
+// The photos live on the dedicated /gallery page for upload/management; here we
+// just render memory-bounded thumbnails and open a lightbox on click.
+function initLibraryGallery() {
+  const grid = document.getElementById('libraryCombined');
+  if (!grid) return;
+  windowImages(Array.from(grid.querySelectorAll('img[data-full]')), () => 640, null);
+  grid.addEventListener('click', (e) => {
+    const clicked = e.target.closest('.gallery-tile img, .gallery-tile video');
+    if (!clicked) return;
+    const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
+    openLightbox(
+      items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
+      items.indexOf(clicked),
+      (end) => { if (items[end]) items[end].scrollIntoView({ block: 'center' }); }
+    );
+  });
+}
+
 // ── Standalone image gallery (upload, delete, lightbox) ─────────────────────
 function initGallery() {
   const grid = document.getElementById('galleryGrid');
@@ -1715,7 +1737,7 @@ function initGallery() {
     el.innerHTML =
       '<span class="tile-check" aria-hidden="true">✓</span>' +
       (isVideo
-        ? `<video src="${img.url}" muted preload="metadata"></video><div class="media-play">▶</div>`
+        ? `<video src="${img.url}#t=0.1" muted preload="metadata" data-full="${img.url}"></video><div class="media-play">▶</div>`
         : `<img src="${img.url}?w=640" data-full="${img.url}" alt="" loading="lazy">`);
     // Newest-first view shows fresh uploads at the top; oldest-first at the bottom.
     grid.insertAdjacentElement(newestFirst ? 'afterbegin' : 'beforeend', el);
