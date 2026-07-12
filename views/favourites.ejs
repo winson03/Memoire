@@ -5,18 +5,46 @@
     <%- include('partials/topbar', { pageTitle: 'Favourites', searchAction: '/favourites' }) %>
     <div class="content">
       <div class="page">
-        <p class="muted-line"><%= favCount %> <%= favCount === 1 ? 'story' : 'stories' %> saved to return to.</p>
+        <p class="muted-line">
+          <%= favCount %> <%= favCount === 1 ? 'story' : 'stories' %><% if (favImages.length) { %> · <%= favImages.length %> <%= favImages.length === 1 ? 'photo' : 'photos' %><% } %> saved to return to.
+        </p>
+
+        <% if (!favBooks.length && !favImages.length) { %>
+          <div class="empty">
+            <div class="ico">♡</div>
+            <div class="et">No favourites yet</div>
+            <div class="eh">Tap the heart on any story or gallery image to keep it here.</div>
+          </div>
+        <% } %>
+
         <% if (favBooks.length) { %>
+          <div class="lib-section-head"><span class="lib-section-title">Stories</span><span class="dim">· <%= favBooks.length %></span></div>
           <div class="cover-grid">
             <% favBooks.forEach(function(book){ %>
               <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'meta' } }) %>
             <% }) %>
           </div>
-        <% } else { %>
-          <div class="empty">
+        <% } %>
+
+        <% if (favImages.length) { %>
+          <div class="lib-section-head"><span class="lib-section-title">Photos</span><span class="dim">· <%= favImages.length %></span><a class="dim lib-section-link" href="/gallery?favourites=1">Open gallery →</a></div>
+          <div class="gallery-grid" id="favouritesPhotos">
+            <% favImages.forEach(function(img){ %>
+              <div class="gallery-tile" data-id="<%= img.id %>">
+                <button type="button" class="gallery-fav faved" aria-label="Remove favourite">♥</button>
+                <% if ((img.mime || '').startsWith('video/')) { %>
+                  <video muted preload="metadata" data-full="/gallery/<%= img.id %>/raw"></video>
+                  <div class="media-play">▶</div>
+                <% } else { %>
+                  <img data-full="/gallery/<%= img.id %>/raw" alt="" loading="lazy">
+                <% } %>
+              </div>
+            <% }) %>
+          </div>
+          <div class="empty" id="favPhotosEmpty" hidden>
             <div class="ico">♡</div>
-            <div class="et">No favourites yet</div>
-            <div class="eh">Tap the heart on any story to keep it here.</div>
+            <div class="et">No favourite photos</div>
+            <div class="eh">Tap the heart on any gallery image to keep it here.</div>
           </div>
         <% } %>
       </div>

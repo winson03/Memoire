@@ -71,6 +71,67 @@ function postForm(action, fields) {
   form.submit();
 }
 
+// ── Toast (reuses the .flash styling) ───────────────────────────────────────
+// Returns a handle so a long action can update its message then dismiss it.
+// timeout = 0 keeps it up until the caller calls done()/dismiss().
+function showToast(message, type = 'info', timeout = 3200) {
+  const el = document.createElement('div');
+  el.className = 'flash ' + type;
+  el.setAttribute('role', 'status');
+  el.textContent = message;
+  el.style.top = (18 + document.querySelectorAll('.flash').length * 56) + 'px';
+  document.body.appendChild(el);
+  const remove = () => {
+    el.style.transition = 'opacity .4s ease, transform .4s ease';
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(-8px)';
+    setTimeout(() => el.remove(), 420);
+  };
+  let timer = timeout ? setTimeout(remove, timeout) : null;
+  return {
+    update(msg, newType) { el.textContent = msg; if (newType) el.className = 'flash ' + newType; },
+    done(msg, newType, after = 2600) { if (timer) clearTimeout(timer); this.update(msg, newType); timer = setTimeout(remove, after); },
+    dismiss: remove,
+  };
+}
+
+// Fetch a file and save it under its server-provided filename, resolving only
+// once the whole file has arrived — so callers can show a "complete" toast (and
+// a live % while it streams, when the server sends Content-Length).
+async function saveDownload(url, opts, onProgress) {
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(cd);
+  let name = 'download';
+  if (m) { try { name = decodeURIComponent(m[1]); } catch (_) { name = m[1]; } }
+  const total = Number(res.headers.get('Content-Length')) || 0;
+  let blob;
+  if (onProgress && total && res.body && res.body.getReader) {
+    const reader = res.body.getReader();
+    const chunks = [];
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      onProgress(received / total);
+    }
+    blob = new Blob(chunks);
+  } else {
+    blob = await res.blob();
+  }
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objUrl;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(objUrl), 10000);
+}
+
 // ── Full-page loading overlay (initial load + between-page navigation) ──────
 function showPageLoader() {
   const el = document.getElementById('pageLoader');
@@ -491,6 +552,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Library: view-only gallery photos merged into the folder tabs.
   initLibraryGallery();
+
+  // Favourites page: favourited gallery photos (heart to remove, click to zoom).
+  initFavouritesGallery();
 
   // Reader: grid/list layout toggle for a photo story's images.
   initReaderFigs();
@@ -1727,6 +1791,41 @@ function initLibraryGallery() {
   });
 }
 
+// ── Favourites page: favourited gallery media (heart to remove, click to zoom) ─
+function initFavouritesGallery() {
+  const grid = document.getElementById('favouritesPhotos');
+  if (!grid) return;
+  const emptyEl = document.getElementById('favPhotosEmpty');
+  windowMedia(Array.from(grid.querySelectorAll('img[data-full], video[data-full]')), () => 640);
+  grid.addEventListener('click', async (e) => {
+    // Heart un-favourites and drops the tile from the page.
+    const fav = e.target.closest('.gallery-fav');
+    if (fav) {
+      e.preventDefault(); e.stopPropagation();
+      const tile = fav.closest('.gallery-tile');
+      fav.disabled = true;
+      try {
+        const res = await fetch('/gallery/' + tile.dataset.id + '/favourite', { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
+        const data = await res.json();
+        if (!data.favourite) {
+          tile.remove();
+          if (emptyEl && !grid.querySelector('.gallery-tile')) emptyEl.hidden = false;
+        }
+      } catch (_) { /* ignore */ } finally { fav.disabled = false; }
+      return;
+    }
+    const clicked = e.target.closest('.gallery-tile img, .gallery-tile video');
+    if (clicked) {
+      const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
+      openLightbox(
+        items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
+        items.indexOf(clicked),
+        (end) => { if (items[end]) items[end].scrollIntoView({ block: 'center' }); }
+      );
+    }
+  });
+}
+
 // ── Standalone image gallery (upload, delete, lightbox) ─────────────────────
 function initGallery() {
   const grid = document.getElementById('galleryGrid');
@@ -1772,6 +1871,7 @@ function initGallery() {
     const isVideo = (img.mime || '').startsWith('video/');
     el.innerHTML =
       '<span class="tile-check" aria-hidden="true">✓</span>' +
+      '<button type="button" class="gallery-fav" aria-label="Favourite">♡</button>' +
       (isVideo
         ? `<video muted preload="metadata" data-full="${img.url}"></video><div class="media-play">▶</div>`
         : `<img src="${img.url}?w=640" data-full="${img.url}" alt="" loading="lazy">`);
@@ -1890,41 +1990,88 @@ function initGallery() {
   });
 
   const selDownload = document.getElementById('gallerySelectDownload');
-  if (selDownload) selDownload.addEventListener('click', () => {
+  if (selDownload) selDownload.addEventListener('click', async () => {
     const ids = selectedIds();
     if (!ids.length) return;
-    // Native download via a form → hidden iframe, so the page isn't disturbed.
-    let frame = document.getElementById('bulkDlFrame');
-    if (!frame) { frame = document.createElement('iframe'); frame.name = 'bulkDlFrame'; frame.id = 'bulkDlFrame'; frame.style.display = 'none'; document.body.appendChild(frame); }
-    const form = document.createElement('form');
-    form.method = 'POST'; form.action = '/gallery/bulk-download'; form.target = 'bulkDlFrame'; form.style.display = 'none';
-    ids.forEach((id) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = 'ids'; i.value = id; form.appendChild(i); });
-    document.body.appendChild(form);
-    form.submit();
-    form.remove();
-  });
-
-  const selDelete = document.getElementById('gallerySelectDelete');
-  if (selDelete) selDelete.addEventListener('click', async () => {
-    const ids = selectedIds();
-    if (!ids.length) return;
-    if (!window.confirm(`Delete ${ids.length} ${ids.length === 1 ? 'image' : 'images'}? This can't be undone.`)) return;
-    selDelete.disabled = true;
+    const n = ids.length;
+    const label = `${n} ${n === 1 ? 'item' : 'items'}`;
+    const toast = showToast(`Downloading ${label}…`, 'info', 0);
+    selDownload.disabled = true;
+    const onProgress = (frac) => toast.update(`Downloading ${label}… ${Math.round(frac * 100)}%`);
     try {
-      await fetch('/gallery/bulk-delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      });
-      selectedTiles().forEach((t) => t.remove());
-      if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
-      exitSelect();
+      // A single item downloads straight from its media URL — streamed with its
+      // real filename/extension (so a video comes down as a playable .mp4).
+      // Multiple items are zipped server-side. Either way we resolve when the
+      // whole file has arrived, then confirm with a completion toast.
+      if (n === 1) {
+        await saveDownload('/gallery/' + ids[0] + '/raw?download=1', undefined, onProgress);
+      } else {
+        await saveDownload('/gallery/bulk-download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        }, onProgress);
+      }
+      toast.done(`Downloaded ${label} ✓`, 'info');
+    } catch (err) {
+      toast.done('Download failed — please try again', 'error', 3600);
     } finally {
-      selDelete.disabled = false;
+      selDownload.disabled = false;
     }
   });
 
+  const selDelete = document.getElementById('gallerySelectDelete');
+  if (selDelete) selDelete.addEventListener('click', () => {
+    const ids = selectedIds();
+    if (!ids.length) return;
+    const n = ids.length;
+    openDialog({
+      title: 'Delete media?',
+      body: `Delete ${n} ${n === 1 ? 'item' : 'items'}? This can’t be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        selDelete.disabled = true;
+        try {
+          await fetch('/gallery/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids }),
+          });
+          selectedTiles().forEach((t) => t.remove());
+          if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
+          exitSelect();
+        } finally {
+          selDelete.disabled = false;
+        }
+      },
+    });
+  });
+
+  // Toggle an image's favourite flag when its heart is tapped (owner only).
+  async function toggleFav(fav) {
+    const tile = fav.closest('.gallery-tile');
+    if (!tile) return;
+    fav.disabled = true;
+    try {
+      const res = await fetch('/gallery/' + tile.dataset.id + '/favourite', { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
+      const data = await res.json();
+      fav.classList.toggle('faved', data.favourite);
+      fav.textContent = data.favourite ? '♥' : '♡';
+      // In the Favourites tab, un-favouriting drops the tile from view.
+      if (grid.dataset.fav && !data.favourite) {
+        tile.remove();
+        if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
+      }
+    } catch (_) { /* ignore */ } finally {
+      fav.disabled = false;
+    }
+  }
+
   grid.addEventListener('click', (e) => {
+    // The heart toggles favourite (in any mode) — handle it before selection/zoom.
+    const fav = e.target.closest('.gallery-fav');
+    if (fav) { e.preventDefault(); e.stopPropagation(); toggleFav(fav); return; }
     // In select mode, tapping a tile toggles its selection instead of zooming.
     if (grid.classList.contains('select-mode')) {
       const tile = e.target.closest('.gallery-tile');

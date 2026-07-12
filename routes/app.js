@@ -228,7 +228,9 @@ router.get('/favourites', (req, res) => {
   // A favourite stays visible only while it's public or owned by the user.
   const all = Books.listAll().filter((b) => ids.includes(b.id) && (b.status === 'published' || b.user_id === req.user.id));
   const favBooks = filt(all, q);
-  res.render('favourites', { favBooks, favCount: all.length });
+  // Favourited gallery media shows here too (only when not searching stories).
+  const favImages = q ? [] : Gallery.listFavourites(req.user.id);
+  res.render('favourites', { favBooks, favCount: all.length, favImages });
 });
 
 // ── Profile ──────────────────────────────────────────────────────────────────

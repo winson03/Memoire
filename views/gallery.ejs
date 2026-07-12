@@ -7,18 +7,27 @@
       <div class="page">
 
         <% var collQ = activeCollection ? ('&collection=' + activeCollection.id) : ''; %>
+        <% var sortQ = activeCollection ? ('&collection=' + activeCollection.id) : (favMode ? '&favourites=1' : ''); %>
         <% if (assignMode) { %>
           <div class="assign-head">
             <div>
               <div class="assign-title">Assign images to “<%= activeCollection.name %>”</div>
               <div class="assign-hint">Tap images to select. Ones already in this collection are pre-selected — untap to remove them.</div>
             </div>
-            <a class="btn btn-soft" href="/gallery?order=<%= order %><%= collQ %>">Cancel</a>
+          </div>
+          <!-- Assign action bar: pinned at the top, like the select bar. -->
+          <div class="assign-bar assign-bar-top" id="assignBar">
+            <span class="assign-count" id="assignCount"></span>
+            <div class="assign-actions">
+              <a class="btn btn-soft" href="/gallery?order=<%= order %><%= collQ %>">Cancel</a>
+              <button type="button" class="btn btn-accent" id="assignSave">Save</button>
+            </div>
           </div>
         <% } else { %>
           <div class="gallery-tabs">
             <div class="sort-toggle">
-              <a href="/gallery?order=<%= order %>" class="<%= !activeCollection ? 'active' : '' %>">All</a>
+              <a href="/gallery?order=<%= order %>" class="<%= !activeCollection && !favMode ? 'active' : '' %>">All</a>
+              <a href="/gallery?order=<%= order %>&favourites=1" class="<%= favMode ? 'active' : '' %>">♥ Favourites<span class="tab-count"><%= favCount %></span></a>
               <% collections.forEach(function(c){ %>
                 <a href="/gallery?order=<%= order %>&collection=<%= c.id %>" class="<%= activeCollection && activeCollection.id === c.id ? 'active' : '' %>"><%= c.name %><span class="tab-count"><%= collectionCounts[c.id] || 0 %></span></a>
               <% }) %>
@@ -41,8 +50,8 @@
 
           <div class="gallery-bar">
             <div class="sort-toggle">
-              <a href="/gallery?order=newest<%= collQ %>" class="<%= order === 'newest' ? 'active' : '' %>">Newest first</a>
-              <a href="/gallery?order=oldest<%= collQ %>" class="<%= order === 'oldest' ? 'active' : '' %>">Oldest first</a>
+              <a href="/gallery?order=newest<%= sortQ %>" class="<%= order === 'newest' ? 'active' : '' %>">Newest first</a>
+              <a href="/gallery?order=oldest<%= sortQ %>" class="<%= order === 'oldest' ? 'active' : '' %>">Oldest first</a>
             </div>
             <div style="display:flex;align-items:center;gap:10px;">
               <% if (images.length) { %>
@@ -59,9 +68,10 @@
           <!-- Select-mode action bar: pinned at the top, right under Select. -->
           <div class="assign-bar assign-bar-top" id="gallerySelectBar" hidden>
             <span class="assign-count" id="gallerySelectCount">0 selected</span>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <div class="assign-actions">
               <button type="button" class="btn btn-soft" id="gallerySelectCancel">Cancel</button>
-              <% if (collections.length) { %>
+              <% /* "Add to collection" only on the All tab; inside a collection, use "Assign images" to manage membership. */ %>
+              <% if (collections.length && !activeCollection) { %>
                 <button type="button" class="btn btn-accent" id="gallerySelectAssign">Add to collection</button>
               <% } %>
               <button type="button" class="btn btn-download" id="gallerySelectDownload">Download</button>
@@ -75,11 +85,14 @@
         <div class="gallery-grid <%= assignMode ? 'select-mode' : '' %>" id="galleryGrid" data-order="<%= order %>"
              data-collection="<%= activeCollection ? activeCollection.id : '' %>"
              data-collections="<%- JSON.stringify(collections.map(function(c){ return { id: c.id, name: c.name }; })).replace(/"/g, '&quot;') %>"
-             <% if (assignMode) { %>data-assign="1"<% } %>>
+             <% if (assignMode) { %>data-assign="1"<% } %><% if (favMode) { %> data-fav="1"<% } %>>
           <% images.forEach(function(img){ %>
             <% var inColl = assignMode && img.collection_id === activeCollection.id; %>
             <div class="gallery-tile <%= inColl ? 'selected' : '' %>" data-id="<%= img.id %>">
               <span class="tile-check" aria-hidden="true">✓</span>
+              <% if (!assignMode) { %>
+                <button type="button" class="gallery-fav <%= img.is_favourite ? 'faved' : '' %>" aria-label="Favourite"><%= img.is_favourite ? '♥' : '♡' %></button>
+              <% } %>
               <% if ((img.mime || '').startsWith('video/')) { %>
                 <video muted preload="metadata" data-full="/gallery/<%= img.id %>/raw"></video>
                 <div class="media-play">▶</div>
@@ -90,20 +103,10 @@
           <% }) %>
         </div>
 
-        <% if (assignMode) { %>
-          <div class="assign-bar" id="assignBar">
-            <span class="assign-count" id="assignCount"></span>
-            <div style="display:flex;gap:10px;align-items:center;">
-              <a class="btn btn-soft" href="/gallery?order=<%= order %><%= collQ %>">Cancel</a>
-              <button type="button" class="btn btn-accent" id="assignSave">Save</button>
-            </div>
-          </div>
-        <% } %>
-
         <div class="empty" id="galleryEmpty" <%= images.length ? 'hidden' : '' %>>
-          <div class="ico">▦</div>
-          <div class="et"><%= activeCollection ? ('Nothing in “' + activeCollection.name + '” yet') : 'No media yet' %></div>
-          <div class="eh"><%= activeCollection ? 'Uploads while this tab is open land here, or move media in from All.' : 'Add photos or videos with + Add media — they’ll be sorted by date.' %></div>
+          <div class="ico"><%= favMode ? '♡' : '▦' %></div>
+          <div class="et"><%= favMode ? 'No favourites yet' : (activeCollection ? ('Nothing in “' + activeCollection.name + '” yet') : 'No media yet') %></div>
+          <div class="eh"><%= favMode ? 'Tap the heart on any image to add it here.' : (activeCollection ? 'Uploads while this tab is open land here, or move media in from All.' : 'Add photos or videos with + Add media — they’ll be sorted by date.') %></div>
         </div>
 
       </div>

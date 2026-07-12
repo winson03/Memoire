@@ -39,16 +39,30 @@ router.get('/', (req, res) => {
   const order = req.query.order === 'oldest' ? 'oldest' : 'newest';
   const activeCollection = ownCollection(req, req.query.collection);
   const assignMode = !!(req.query.assign && activeCollection);
+  // The Favourites tab shows only favourited images (not while assigning/in a collection).
+  const favMode = !assignMode && !activeCollection && !!req.query.favourites;
   const listCollectionId = assignMode ? null : (activeCollection ? activeCollection.id : null);
-  const images = Gallery.listForUser(req.user.id, order, listCollectionId);
+  const images = favMode
+    ? Gallery.listFavourites(req.user.id, order)
+    : Gallery.listForUser(req.user.id, order, listCollectionId);
   res.render('gallery', {
     images,
     order,
     collections: Collections.listForUser(req.user.id),
     activeCollection,
     collectionCounts: Gallery.countsByCollection(req.user.id),
+    favMode,
+    favCount: Gallery.favouriteCount(req.user.id),
     assignMode,
   });
+});
+
+// Toggle an image's favourite flag (owner only). AJAX from the tile heart.
+router.post('/:id/favourite', (req, res) => {
+  const img = Gallery.findById(parseInt(req.params.id, 10));
+  if (!img || img.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const favourite = Gallery.toggleFavourite(img.id);
+  res.json({ ok: true, favourite });
 });
 
 // Create a collection, then jump straight into it.
