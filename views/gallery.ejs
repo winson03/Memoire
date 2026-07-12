@@ -68,7 +68,7 @@
             <div class="gallery-tile <%= inColl ? 'selected' : '' %>" data-id="<%= img.id %>">
               <span class="tile-check" aria-hidden="true">✓</span>
               <% if ((img.mime || '').startsWith('video/')) { %>
-                <video src="/gallery/<%= img.id %>/raw#t=0.1" muted preload="metadata" data-full="/gallery/<%= img.id %>/raw"></video>
+                <video muted preload="metadata" data-full="/gallery/<%= img.id %>/raw"></video>
                 <div class="media-play">▶</div>
               <% } else { %>
                 <img src="/gallery/<%= img.id %>/raw?w=640" data-full="/gallery/<%= img.id %>/raw" alt="" loading="lazy">

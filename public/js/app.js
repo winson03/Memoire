@@ -1677,13 +1677,44 @@ function initReaderFigWindow() {
   if (body) windowImages(Array.from(body.querySelectorAll('img[data-full]')), () => 1080, null);
 }
 
+// ── Memory-bounded windowing for a MIX of <img> and <video> tiles ───────────
+// Like windowImages, but also handles <video data-full> tiles: a live <video>
+// element holds a decoded frame and iOS caps how many can exist at once, so a
+// grid of many videos crashes the tab ("A problem repeatedly occurred"). We keep
+// only tiles near the viewport loaded — mounting sets the src (video previews at
+// #t=0.1), and off-screen tiles have their src removed (video.load() releases the
+// decoded frame). Elements must start with NO src, just data-full. Returns the
+// IntersectionObserver so callers can observe tiles added later (e.g. uploads).
+function windowMedia(els, widthFor) {
+  const mount = (el) => {
+    if (el.tagName === 'VIDEO') {
+      const want = el.dataset.full + '#t=0.1';
+      if (el.getAttribute('src') !== want) { el.src = want; el.load(); }
+    } else {
+      const want = `${el.dataset.full}?w=${widthFor()}`;
+      if (el.getAttribute('src') !== want) el.src = want;
+    }
+  };
+  const unmount = (el) => {
+    if (!el.getAttribute('src')) return;
+    el.removeAttribute('src');
+    if (el.tagName === 'VIDEO') el.load(); // free the decoded frame / media resource
+  };
+  if (!('IntersectionObserver' in window)) { els.forEach(mount); return null; }
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) { if (e.isIntersecting) mount(e.target); else unmount(e.target); }
+  }, { rootMargin: '600px 0px', threshold: 0 });
+  els.forEach((el) => io.observe(el));
+  return io;
+}
+
 // ── Library: view-only gallery photos shown under the folder tabs ───────────
 // The photos live on the dedicated /gallery page for upload/management; here we
-// just render memory-bounded thumbnails and open a lightbox on click.
+// just render memory-bounded thumbnails/videos and open a lightbox on click.
 function initLibraryGallery() {
   const grid = document.getElementById('libraryCombined');
   if (!grid) return;
-  windowImages(Array.from(grid.querySelectorAll('img[data-full]')), () => 640, null);
+  windowMedia(Array.from(grid.querySelectorAll('img[data-full], video[data-full]')), () => 640);
   grid.addEventListener('click', (e) => {
     const clicked = e.target.closest('.gallery-tile img, .gallery-tile video');
     if (!clicked) return;
@@ -1722,6 +1753,11 @@ function initGallery() {
 
   if (btn && input) btn.addEventListener('click', () => input.click());
 
+  // Window the video tiles so only those near the viewport hold a live <video>
+  // (many at once crash iOS). Images already load lazy 640px thumbnails, so they
+  // stay light on their own. Newly-uploaded video tiles are observed in addTile.
+  const videoWindow = windowMedia(Array.from(grid.querySelectorAll('video[data-full]')), () => 640);
+
   function showProgress(done, total, eta) {
     if (!progress) return;
     if (total <= 0) { progress.hidden = true; progress.textContent = ''; return; }
@@ -1737,10 +1773,12 @@ function initGallery() {
     el.innerHTML =
       '<span class="tile-check" aria-hidden="true">✓</span>' +
       (isVideo
-        ? `<video src="${img.url}#t=0.1" muted preload="metadata" data-full="${img.url}"></video><div class="media-play">▶</div>`
+        ? `<video muted preload="metadata" data-full="${img.url}"></video><div class="media-play">▶</div>`
         : `<img src="${img.url}?w=640" data-full="${img.url}" alt="" loading="lazy">`);
     // Newest-first view shows fresh uploads at the top; oldest-first at the bottom.
     grid.insertAdjacentElement(newestFirst ? 'afterbegin' : 'beforeend', el);
+    // Keep new video tiles memory-bounded like the initial ones.
+    if (isVideo && videoWindow) videoWindow.observe(el.querySelector('video[data-full]'));
     if (empty) empty.hidden = true;
   }
 

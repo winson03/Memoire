@@ -350,7 +350,10 @@ textarea.input { line-height: 1.5; resize: vertical; }
 /* Library: gallery photos sit in the same grid as story covers. Top-align so a
    square photo next to a taller cover card doesn't stretch, and give it the same
    3/4 card shape as the covers for a uniform grid. */
-.cover-grid .gallery-tile { align-self: start; aspect-ratio: 3 / 4; border-radius: 15px; }
+.cover-grid .gallery-tile { align-self: start; aspect-ratio: 3 / 4; border-radius: 15px; min-width: 0; }
+/* Grid items must be allowed to shrink below their content's intrinsic width —
+   a <video>/<img> tile otherwise inflates the 1fr tracks and overflows on mobile. */
+.cover-grid > * { min-width: 0; }
 /* Gallery bulk-assign: tap tiles to select which belong to a collection. */
 .assign-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
 .assign-title { font-family: var(--head-font); font-size: 20px; color: var(--ink); }
@@ -725,7 +728,7 @@ textarea.input { line-height: 1.5; resize: vertical; }
   .notif-list { max-height: 60vh; }
 
   /* Two smaller story cards per row on phones. */
-  .cover-grid, .cover-grid.sm, .cover-grid.xs { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .cover-grid, .cover-grid.sm, .cover-grid.xs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .cover-spine { padding: 12px; border-radius: 13px; }
   .cover-title { font-size: 16px; }
   .cover-series { font-size: 9.5px; }

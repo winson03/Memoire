@@ -51,7 +51,7 @@
             <% if (showPhotos) { images.forEach(function(img){ %>
               <div class="gallery-tile lib-photo" data-id="<%= img.id %>">
                 <% if ((img.mime || '').startsWith('video/')) { %>
-                  <video src="/gallery/<%= img.id %>/raw#t=0.1" muted preload="metadata" data-full="/gallery/<%= img.id %>/raw"></video>
+                  <video muted preload="metadata" data-full="/gallery/<%= img.id %>/raw"></video>
                   <div class="media-play">▶</div>
                 <% } else { %>
                   <img data-full="/gallery/<%= img.id %>/raw" alt="" loading="lazy">
