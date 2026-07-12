@@ -374,6 +374,8 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .gallery-grid.select-mode .tile-check { display: flex; }
 .gallery-tile.selected .tile-check { color: #fff; background: var(--accent); }
 .assign-bar { position: sticky; bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 20px; padding: 13px 18px; background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.85); border-radius: 14px; box-shadow: 0 12px 32px rgba(120,80,50,0.14); }
+/* Select-mode bar variant: pin to the top (under the toolbar) instead of the bottom. */
+.assign-bar-top { top: 10px; bottom: auto; margin-top: 0; margin-bottom: 18px; z-index: 5; }
 .assign-count { font-size: 14px; font-weight: 600; color: var(--ink); }
 /* Touch screens have no hover — keep tile actions visible so the first tap opens
    the image (a hover-revealed control would otherwise swallow the first tap). */

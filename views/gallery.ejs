@@ -55,6 +55,19 @@
               <button type="button" class="btn btn-accent" id="galleryUploadBtn">+ Add media</button>
             </div>
           </div>
+
+          <!-- Select-mode action bar: pinned at the top, right under Select. -->
+          <div class="assign-bar assign-bar-top" id="gallerySelectBar" hidden>
+            <span class="assign-count" id="gallerySelectCount">0 selected</span>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <button type="button" class="btn btn-soft" id="gallerySelectCancel">Cancel</button>
+              <% if (collections.length) { %>
+                <button type="button" class="btn btn-accent" id="gallerySelectAssign">Add to collection</button>
+              <% } %>
+              <button type="button" class="btn btn-download" id="gallerySelectDownload">Download</button>
+              <button type="button" class="btn btn-danger" id="gallerySelectDelete">Delete</button>
+            </div>
+          </div>
         <% } %>
 
         <input type="file" id="galleryInput" accept="image/*,video/*" multiple hidden>
@@ -83,18 +96,6 @@
             <div style="display:flex;gap:10px;align-items:center;">
               <a class="btn btn-soft" href="/gallery?order=<%= order %><%= collQ %>">Cancel</a>
               <button type="button" class="btn btn-accent" id="assignSave">Save</button>
-            </div>
-          </div>
-        <% } else { %>
-          <div class="assign-bar" id="gallerySelectBar" hidden>
-            <span class="assign-count" id="gallerySelectCount">0 selected</span>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-              <button type="button" class="btn btn-soft" id="gallerySelectCancel">Cancel</button>
-              <% if (collections.length) { %>
-                <button type="button" class="btn btn-accent" id="gallerySelectAssign">Add to collection</button>
-              <% } %>
-              <button type="button" class="btn btn-download" id="gallerySelectDownload">Download</button>
-              <button type="button" class="btn btn-danger" id="gallerySelectDelete">Delete</button>
             </div>
           </div>
         <% } %>
