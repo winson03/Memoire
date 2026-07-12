@@ -140,13 +140,32 @@ router.get('/library', (req, res) => {
   const images = active ? imagesIn(active.collectionIds) : allImages;
   const shownStories = filt(stories, q).sort((a, b) => b.id - a.id); // newest first
 
+  // One ordered list of cards — stories first, then photos (photos are hidden
+  // while searching, which filters stories only). Paginate it: rendering every
+  // card at once put hundreds of cover/photo images in the DOM, and mobile
+  // Safari keeps each decoded image in memory (even off-screen ones it caches),
+  // which crashes the tab. A bounded page keeps the image count — and memory —
+  // in check, and each page navigation frees the previous page entirely.
+  const items = [
+    ...shownStories.map((b) => ({ type: 'story', book: b })),
+    ...(q ? [] : images.map((i) => ({ type: 'photo', img: i }))),
+  ];
+  const perPage = 24;
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+  const pageItems = items.slice((page - 1) * perPage, page * perPage);
+
   res.render('library', {
     tabs,
     activeTab: active ? { name: active.name } : null,
     allActive: !active,
     allCount: books.length + allImages.length,
-    stories: shownStories,
-    images,
+    items: pageItems,
+    storyTotal: shownStories.length,
+    photoTotal: images.length,
+    page,
+    totalPages,
     query: q,
     folders, // feeds the bulk-import popup's "add to folder" dropdown
   });
