@@ -5,9 +5,17 @@
   var showFav = o.showFav !== false;
   var faved = favIds.indexOf(book.id) !== -1;
   var titleSize = o.titleSize || (o.small ? 20 : 21);
+  // lazyCover: render the cover photo as a windowed <img> (memory-bounded) rather
+  // than a CSS background, so a page with hundreds of covers doesn't decode them
+  // all at once and crash mobile Safari. Only pages that pass it opt in.
+  var lazyCover = o.lazyCover && coverIsImage(book);
 %>
 <div class="cover-card" data-href="/reader/<%= book.id %>" data-title="<%= book.title || '' %>" data-date="<%= book.created_at || '' %>" data-fav="<%= faved ? '1' : '0' %>">
-  <div class="cover-spine <%= coverIsImage(book) ? 'has-image' : '' %>" style="background: <%= coverBackground(book) %>;">
+  <div class="cover-spine <%= coverIsImage(book) ? 'has-image' : '' %> <%= lazyCover ? 'lazy-cover' : '' %>" style="background: <%= lazyCover ? themeGradient(book.theme) : coverBackground(book) %>;">
+    <% if (lazyCover) { %>
+      <img class="cover-bg" data-full="/media/<%= coverImageId(book) %>" alt="" loading="lazy">
+      <span class="cover-bg-veil"></span>
+    <% } %>
     <% if (showFav) { %>
       <div class="cover-top">
         <span class="cover-series"><%= book.series || '' %></span>

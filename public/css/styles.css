@@ -351,6 +351,12 @@ textarea.input { line-height: 1.5; resize: vertical; }
    square photo next to a taller cover card doesn't stretch, and give it the same
    3/4 card shape as the covers for a uniform grid. */
 .cover-grid .gallery-tile { align-self: start; aspect-ratio: 3 / 4; border-radius: 15px; min-width: 0; }
+/* Windowed cover image (lazy-cover mode): the photo is an <img> layer behind a
+   legibility veil, so it can be loaded/unloaded like any other windowed tile. */
+.cover-spine.lazy-cover .cover-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.cover-spine.lazy-cover .cover-bg-veil { position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.12) 42%, rgba(0,0,0,0.62) 100%); }
+.cover-spine.lazy-cover > *:not(.cover-bg):not(.cover-bg-veil) { position: relative; z-index: 2; }
 /* Grid items must be allowed to shrink below their content's intrinsic width —
    a <video>/<img> tile otherwise inflates the 1fr tracks and overflows on mobile. */
 .cover-grid > * { min-width: 0; }

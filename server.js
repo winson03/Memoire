@@ -112,6 +112,7 @@ app.locals.assetVer = (rel) => {
 };
 app.locals.coverBackground = viewHelpers.coverBackground;
 app.locals.coverIsImage = viewHelpers.coverIsImage;
+app.locals.coverImageId = viewHelpers.coverImageId;
 app.locals.avatarUrl = viewHelpers.avatarUrl;
 app.locals.formatDob = viewHelpers.formatDob;
 

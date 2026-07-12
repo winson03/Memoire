@@ -46,7 +46,7 @@
         <% if (stories.length || showPhotos) { %>
           <div class="cover-grid" id="libraryCombined">
             <% stories.forEach(function(book){ %>
-              <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'status-meta' } }) %>
+              <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'status-meta', lazyCover: true } }) %>
             <% }) %>
             <% if (showPhotos) { images.forEach(function(img){ %>
               <div class="gallery-tile lib-photo" data-id="<%= img.id %>">
