@@ -1895,7 +1895,11 @@ function windowMedia(els, widthFor) {
 // The photos live on the dedicated /gallery page for upload/management; here we
 // just render memory-bounded thumbnails/videos and open a lightbox on click.
 function initLibraryGallery() {
-  const grid = document.getElementById('libraryCombined');
+  // The Library and the Dashboard's "Your library" strip both mix story covers
+  // with gallery photos in one grid — bind the same behaviour to whichever exists.
+  ['libraryCombined', 'dashLibrary'].forEach((id) => bindPhotoGrid(document.getElementById(id)));
+}
+function bindPhotoGrid(grid) {
   if (!grid) return;
   windowMedia(Array.from(grid.querySelectorAll('img[data-full], video[data-full]')), () => 640);
   grid.addEventListener('click', async (e) => {

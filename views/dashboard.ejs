@@ -25,10 +25,23 @@
           <h2 class="h2">Your library</h2>
           <a href="/library" class="btn-link-accent">See all →</a>
         </div>
-        <% if (yourBooks.length) { %>
-          <div class="cover-grid" style="margin-bottom:48px;">
-            <% yourBooks.forEach(function(book){ %>
-              <%- include('partials/cover-card', { book: book, opts: { showFav: true, foot: 'status-meta' } }) %>
+        <% if (libraryItems.length) { %>
+          <div class="cover-grid" id="dashLibrary" style="margin-bottom:48px;">
+            <% libraryItems.forEach(function(it){ %>
+              <% if (it.type === 'story') { %>
+                <%- include('partials/cover-card', { book: it.book, opts: { showFav: true, foot: 'status-meta', lazyCover: true } }) %>
+              <% } else { %>
+                <div class="gallery-tile lib-photo" data-id="<%= it.img.id %>">
+                  <button type="button" class="gallery-fav <%= it.img.is_favourite ? 'faved' : '' %>" aria-label="Favourite"><%= it.img.is_favourite ? '♥' : '♡' %></button>
+                  <% if ((it.img.mime || '').startsWith('video/')) { %>
+                    <video muted preload="metadata" data-full="/gallery/<%= it.img.id %>/raw"></video>
+                    <div class="media-play">▶</div>
+                  <% } else { %>
+                    <img data-full="/gallery/<%= it.img.id %>/raw" alt="" loading="lazy">
+                  <% } %>
+                  <% if (it.img.file_name) { %><div class="tile-name" title="<%= it.img.file_name %>"><%= it.img.file_name %></div><% } %>
+                </div>
+              <% } %>
             <% }) %>
           </div>
         <% } else { %>

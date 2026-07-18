@@ -79,8 +79,15 @@ router.get('/dashboard', (req, res) => {
   const u = req.user;
   const q = req.query.q || '';
   const mine = Books.listByUser(u.id);
-  // Dashboard shows just a few of your latest books; the full list lives on /library.
-  const yourBooks = filt(mine, q).sort((a, b) => b.id - a.id).slice(0, 5);
+  // Dashboard's "Your library" mixes your latest stories and gallery photos in
+  // one strip (like the /library page), newest first, capped at a few. The full
+  // combined list lives on /library. Photos are hidden while searching.
+  const shownStories = filt(mine, q);
+  const myImages = q ? [] : Gallery.listForUser(u.id);
+  const libraryItems = [
+    ...shownStories.map((b) => ({ type: 'story', book: b, date: b.created_at || '' })),
+    ...myImages.map((i) => ({ type: 'photo', img: i, date: i.created_at || '' })),
+  ].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 5);
   // Dashboard shows only the hottest published stories (most readers); the full
   // list lives on the paginated /discover page.
   const hot = filt(Books.listPublished(), q)
@@ -91,7 +98,7 @@ router.get('/dashboard', (req, res) => {
     firstName: firstName(u.name),
     libCount: mine.length,
     publishedCount: mine.filter((b) => b.status === 'published').length,
-    yourBooks,
+    libraryItems,
     discover: hot,
   });
 });
