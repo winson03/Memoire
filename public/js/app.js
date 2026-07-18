@@ -2007,7 +2007,8 @@ function initGallery() {
       '<button type="button" class="gallery-fav" aria-label="Favourite">♡</button>' +
       (isVideo
         ? `<video muted preload="metadata" data-full="${img.url}"></video><div class="media-play">▶</div>`
-        : `<img src="${img.url}?w=640" data-full="${img.url}" alt="" loading="lazy">`);
+        : `<img src="${img.url}?w=640" data-full="${img.url}" alt="" loading="lazy">`) +
+      (img.file_name ? `<div class="tile-name" title="${escapeHtml(img.file_name)}">${escapeHtml(img.file_name)}</div>` : '');
     // Newest-first view shows fresh uploads at the top; oldest-first at the bottom.
     grid.insertAdjacentElement(newestFirst ? 'afterbegin' : 'beforeend', el);
     // Keep new video tiles memory-bounded like the initial ones.

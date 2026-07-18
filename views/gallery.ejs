@@ -99,6 +99,7 @@
               <% } else { %>
                 <img src="/gallery/<%= img.id %>/raw?w=640" data-full="/gallery/<%= img.id %>/raw" alt="" loading="lazy">
               <% } %>
+              <% if (img.file_name) { %><div class="tile-name" title="<%= img.file_name %>"><%= img.file_name %></div><% } %>
             </div>
           <% }) %>
         </div>

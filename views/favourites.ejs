@@ -47,6 +47,7 @@
                   <% } else { %>
                     <img data-full="/gallery/<%= it.img.id %>/raw" alt="" loading="lazy">
                   <% } %>
+                  <% if (it.img.file_name) { %><div class="tile-name" title="<%= it.img.file_name %>"><%= it.img.file_name %></div><% } %>
                 </div>
               <% } %>
             <% }) %>

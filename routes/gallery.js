@@ -208,7 +208,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       file_size: rec.file_size,
       collection_id: coll ? coll.id : null,
     });
-    res.json({ id: img.id, url: '/gallery/' + img.id + '/raw', mime: img.mime });
+    res.json({ id: img.id, url: '/gallery/' + img.id + '/raw', mime: img.mime, file_name: img.file_name });
   } catch (err) {
     console.error('[gallery upload]', err.message);
     res.status(500).json({ error: 'Upload failed: ' + err.message });
@@ -243,7 +243,7 @@ router.post('/register-drive', async (req, res) => {
       file_size: Number(meta.size) || null,
       collection_id: coll ? coll.id : null,
     });
-    res.json({ id: img.id, url: '/gallery/' + img.id + '/raw', mime: img.mime });
+    res.json({ id: img.id, url: '/gallery/' + img.id + '/raw', mime: img.mime, file_name: img.file_name });
   } catch (err) {
     console.error('[gallery register-drive]', err.message);
     res.status(502).json({ error: 'Could not register the upload: ' + err.message });
