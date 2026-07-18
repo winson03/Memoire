@@ -36,15 +36,20 @@ router.use(ensureAuth);
 // ?assign=1 (with a collection) enters bulk-assign mode: show ALL images so the
 // user can multi-select which ones belong to the collection.
 router.get('/', (req, res) => {
-  const order = req.query.order === 'oldest' ? 'oldest' : 'newest';
+  // Sort modes: newest (default), oldest, or fav (favourites first, then newest).
+  const order = ['oldest', 'fav'].includes(req.query.order) ? req.query.order : 'newest';
+  const baseOrder = order === 'oldest' ? 'oldest' : 'newest';
   const activeCollection = ownCollection(req, req.query.collection);
   const assignMode = !!(req.query.assign && activeCollection);
   // The Favourites tab shows only favourited images (not while assigning/in a collection).
   const favMode = !assignMode && !activeCollection && !!req.query.favourites;
   const listCollectionId = assignMode ? null : (activeCollection ? activeCollection.id : null);
-  const images = favMode
-    ? Gallery.listFavourites(req.user.id, order)
-    : Gallery.listForUser(req.user.id, order, listCollectionId);
+  let images = favMode
+    ? Gallery.listFavourites(req.user.id, baseOrder)
+    : Gallery.listForUser(req.user.id, baseOrder, listCollectionId);
+  // "Favourites first" is a stable re-sort of the newest-ordered list: favourited
+  // images float to the top, keeping their date order within each group.
+  if (order === 'fav') images = images.slice().sort((a, b) => (b.is_favourite ? 1 : 0) - (a.is_favourite ? 1 : 0));
   res.render('gallery', {
     images,
     order,

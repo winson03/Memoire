@@ -578,6 +578,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // Library: bulk folder import (1 folder = 1 private story).
   initFolderImport();
 
+  // Library: import media straight into the gallery, assigned to a collection.
+  initGalleryImport();
+
+  // Library: sort mode — reload with ?sort= (the server remembers the choice).
+  const librarySort = document.getElementById('librarySortSelect');
+  if (librarySort) librarySort.addEventListener('change', () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('sort', librarySort.value);
+    url.searchParams.delete('page'); // a new sort starts from page 1
+    window.location.href = url.toString();
+  });
+
   // Live search — debounced auto-submit, with focus/caret restored after reload.
   const searchForm = document.getElementById('searchForm');
   const searchInput = document.getElementById('searchInput');
@@ -1276,6 +1288,113 @@ function initFolderImport() {
   }
 }
 
+// ── Library: import media straight into the gallery, assigned to a collection ──
+// A sibling to the folder import: pick photos/videos, choose a collection to
+// file them under (or none), and they upload to the gallery like a normal
+// gallery upload — then the library reloads to show them.
+function initGalleryImport() {
+  const btn = document.getElementById('importGalleryBtn');
+  if (!btn) return;
+  const input = document.getElementById('importGalleryInput');
+  const progress = document.getElementById('importProgress');
+
+  function collections() {
+    const el = document.getElementById('importCollectionsData');
+    try { return el ? JSON.parse(el.textContent) : []; } catch (_) { return []; }
+  }
+
+  function show(text) {
+    if (!progress) return;
+    progress.hidden = !text;
+    progress.textContent = text || '';
+  }
+
+  // Ask which collection to file the imported media under. Resolves to the
+  // chosen collection id ('' = no collection), or null if the user cancels.
+  function pickCollection(count) {
+    return new Promise((resolve) => {
+      const backdrop = document.createElement('div');
+      backdrop.className = 'dialog-backdrop';
+      const opts = collections().concat([{ id: '', name: 'No collection' }]);
+      backdrop.innerHTML =
+        '<div class="dialog-card" role="dialog" aria-modal="true">' +
+        `<h3>Add ${count} ${count === 1 ? 'item' : 'items'} to…</h3>` +
+        '<div class="chooser">' +
+        opts.map((c) => `<button type="button" class="chooser-opt" data-id="${c.id}">${escapeHtml(c.name)}</button>`).join('') +
+        '</div><div class="dialog-actions"><button type="button" class="dialog-cancel">Cancel</button></div></div>';
+      document.body.appendChild(backdrop);
+      let done = false;
+      const close = (val) => { if (done) return; done = true; backdrop.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+      const onKey = (e) => { if (e.key === 'Escape') close(null); };
+      backdrop.addEventListener('click', () => close(null));
+      backdrop.querySelector('.dialog-card').addEventListener('click', (e) => e.stopPropagation());
+      backdrop.querySelector('.dialog-cancel').addEventListener('click', () => close(null));
+      backdrop.querySelectorAll('.chooser-opt').forEach((b) => b.addEventListener('click', () => close(b.dataset.id)));
+      document.addEventListener('keydown', onKey);
+    });
+  }
+
+  btn.addEventListener('click', () => { if (input) input.click(); });
+
+  if (input) input.addEventListener('change', async () => {
+    const files = Array.from(input.files || []).filter((f) => /^(image|video)\//.test(f.type || ''));
+    input.value = '';
+    if (!files.length) return;
+
+    const collectionId = await pickCollection(files.length);
+    if (collectionId === null) return; // cancelled
+
+    const eta = makeUploadEta(files);
+    let done = 0;
+    let uploaded = 0;
+    const label = () => `Uploading ${Math.min(done + 1, files.length)}/${files.length} · ${eta.text()}…`;
+    const ticker = setInterval(() => show(label()), 1000);
+    try {
+      const queue = files.slice();
+      const worker = async () => {
+        for (let file = queue.shift(); file; file = queue.shift()) {
+          show(label());
+          try {
+            let res;
+            if (wantsDriveDirect(file)) {
+              const df = await uploadToDrive(file, (sent) => eta.progress(file, sent));
+              res = await fetch('/gallery/register-drive', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ drive_id: df.id, file_name: file.name, mime: file.type, collection_id: collectionId }),
+              });
+            } else {
+              const fd = new FormData();
+              fd.append('file', file);
+              if (collectionId) fd.append('collection_id', collectionId);
+              res = await postFormWithProgress('/gallery', fd, (sent) => eta.progress(file, sent));
+            }
+            if (res.ok) uploaded += 1;
+          } catch (_) { /* skip failed file */ }
+          eta.fileDone(file);
+          done += 1;
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(2, files.length) }, worker));
+    } finally {
+      clearInterval(ticker);
+    }
+    show('');
+    // Persist the bell notification before reloading (reload can abort in-flight
+    // fetches, so await it rather than fire-and-forget).
+    if (uploaded > 1) {
+      try {
+        await fetch('/gallery/notify-complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ count: uploaded }),
+        });
+      } catch (_) { /* best-effort */ }
+    }
+    location.reload(); // show the new photos in the library grid
+  });
+}
+
 function formatDuration(secs) {
   secs = Math.max(1, Math.round(secs));
   if (secs < 60) return `${secs}s`;
@@ -1779,7 +1898,21 @@ function initLibraryGallery() {
   const grid = document.getElementById('libraryCombined');
   if (!grid) return;
   windowMedia(Array.from(grid.querySelectorAll('img[data-full], video[data-full]')), () => 640);
-  grid.addEventListener('click', (e) => {
+  grid.addEventListener('click', async (e) => {
+    // The heart toggles a photo's favourite flag (no reload).
+    const fav = e.target.closest('.gallery-fav');
+    if (fav) {
+      e.preventDefault(); e.stopPropagation();
+      const tile = fav.closest('.gallery-tile');
+      fav.disabled = true;
+      try {
+        const res = await fetch('/gallery/' + tile.dataset.id + '/favourite', { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
+        const data = await res.json();
+        fav.classList.toggle('faved', data.favourite);
+        fav.textContent = data.favourite ? '♥' : '♡';
+      } catch (_) { /* ignore */ } finally { fav.disabled = false; }
+      return;
+    }
     const clicked = e.target.closest('.gallery-tile img, .gallery-tile video');
     if (!clicked) return;
     const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
@@ -1791,14 +1924,17 @@ function initLibraryGallery() {
   });
 }
 
-// ── Favourites page: favourited gallery media (heart to remove, click to zoom) ─
+// ── Favourites page: one combined grid of favourited stories + gallery media ──
+// (heart to un-favourite, click a photo to zoom; stories navigate via data-href
+// and their hearts use the global .heart-btn handler).
 function initFavouritesGallery() {
-  const grid = document.getElementById('favouritesPhotos');
+  const grid = document.getElementById('favouritesCombined');
   if (!grid) return;
-  const emptyEl = document.getElementById('favPhotosEmpty');
+  const emptyEl = document.getElementById('favEmpty');
+  const showEmptyIfBare = () => { if (emptyEl && !grid.querySelector('.gallery-tile, .cover-card')) emptyEl.hidden = false; };
   windowMedia(Array.from(grid.querySelectorAll('img[data-full], video[data-full]')), () => 640);
   grid.addEventListener('click', async (e) => {
-    // Heart un-favourites and drops the tile from the page.
+    // A photo's heart un-favourites and drops its tile from the page.
     const fav = e.target.closest('.gallery-fav');
     if (fav) {
       e.preventDefault(); e.stopPropagation();
@@ -1807,10 +1943,7 @@ function initFavouritesGallery() {
       try {
         const res = await fetch('/gallery/' + tile.dataset.id + '/favourite', { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
         const data = await res.json();
-        if (!data.favourite) {
-          tile.remove();
-          if (emptyEl && !grid.querySelector('.gallery-tile')) emptyEl.hidden = false;
-        }
+        if (!data.favourite) { tile.remove(); showEmptyIfBare(); }
       } catch (_) { /* ignore */ } finally { fav.disabled = false; }
       return;
     }

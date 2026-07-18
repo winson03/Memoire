@@ -138,18 +138,44 @@ router.get('/library', (req, res) => {
 
   const stories = active ? booksIn(active.folderIds) : books;
   const images = active ? imagesIn(active.collectionIds) : allImages;
-  const shownStories = filt(stories, q).sort((a, b) => b.id - a.id); // newest first
+  const shownStories = filt(stories, q);
 
-  // One ordered list of cards — stories first, then photos (photos are hidden
-  // while searching, which filters stories only). Paginate it: rendering every
-  // card at once put hundreds of cover/photo images in the DOM, and mobile
-  // Safari keeps each decoded image in memory (even off-screen ones it caches),
-  // which crashes the tab. A bounded page keeps the image count — and memory —
-  // in check, and each page navigation frees the previous page entirely.
+  // Sort mode, remembered in the session so it sticks across pages and visits.
+  // A ?sort= in the URL overrides and updates the saved choice.
+  const SORTS = ['favourites', 'oldest', 'latest', 'az', 'za'];
+  let sort = req.query.sort;
+  if (sort && SORTS.includes(sort)) req.session.librarySort = sort;
+  else sort = req.session.librarySort;
+  if (!SORTS.includes(sort)) sort = 'latest';
+
+  // One combined list of cards — stories and photos together (photos are hidden
+  // while searching, which filters stories only), then sorted by the chosen
+  // mode. Paginate it: rendering every card at once put hundreds of cover/photo
+  // images in the DOM, and mobile Safari keeps each decoded image in memory
+  // (even off-screen ones it caches), which crashes the tab. A bounded page
+  // keeps the image count — and memory — in check, and each page navigation
+  // frees the previous page entirely.
+  const favSet = new Set(Favourites.idsForUser(u.id));
   const items = [
-    ...shownStories.map((b) => ({ type: 'story', book: b })),
-    ...(q ? [] : images.map((i) => ({ type: 'photo', img: i }))),
+    ...shownStories.map((b) => ({
+      type: 'story', book: b,
+      date: b.created_at || '', title: b.title || '', faved: favSet.has(b.id),
+    })),
+    ...(q ? [] : images.map((i) => ({
+      type: 'photo', img: i,
+      date: i.created_at || '', title: i.label || i.file_name || '', faved: !!i.is_favourite,
+    }))),
   ];
+  const byDateDesc = (a, b) => String(b.date).localeCompare(String(a.date)); // newest first
+  const byName = (a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+  const comparators = {
+    latest: byDateDesc,
+    oldest: (a, b) => byDateDesc(b, a),
+    az: byName,
+    za: (a, b) => byName(b, a),
+    favourites: (a, b) => (Number(b.faved) - Number(a.faved)) || byDateDesc(a, b),
+  };
+  items.sort(comparators[sort]);
   const perPage = 24;
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -167,7 +193,9 @@ router.get('/library', (req, res) => {
     page,
     totalPages,
     query: q,
+    sort, // the active library sort mode (remembered in the session)
     folders, // feeds the bulk-import popup's "add to folder" dropdown
+    collections, // feeds the gallery-import popup's "assign to collection" chooser
   });
 });
 
@@ -223,14 +251,63 @@ router.get('/folders', (req, res) => {
 
 // ── Favourites ─────────────────────────────────────────────────────────────────
 router.get('/favourites', (req, res) => {
+  const u = req.user;
   const q = req.query.q || '';
-  const ids = Favourites.idsForUser(req.user.id);
+  const norm = (s) => (s || '').trim().toLowerCase();
+
+  const ids = Favourites.idsForUser(u.id);
   // A favourite stays visible only while it's public or owned by the user.
-  const all = Books.listAll().filter((b) => ids.includes(b.id) && (b.status === 'published' || b.user_id === req.user.id));
-  const favBooks = filt(all, q);
-  // Favourited gallery media shows here too (only when not searching stories).
-  const favImages = q ? [] : Gallery.listFavourites(req.user.id);
-  res.render('favourites', { favBooks, favCount: all.length, favImages });
+  const allFavBooks = Books.listAll().filter((b) => ids.includes(b.id) && (b.status === 'published' || b.user_id === u.id));
+  const allFavImages = Gallery.listFavourites(u.id);
+
+  // Same tab model as the library: folders (grouping stories) and gallery
+  // collections (grouping photos) merged by name — but only tabs that actually
+  // hold a favourited item are shown.
+  const folders = Folders.listForUser(u.id);
+  const collections = Collections.listForUser(u.id);
+  const tabMap = new Map();
+  const ensure = (name) => {
+    const k = norm(name);
+    if (!tabMap.has(k)) tabMap.set(k, { key: k, name, folderIds: [], collectionIds: [] });
+    return tabMap.get(k);
+  };
+  folders.forEach((f) => ensure(f.name).folderIds.push(f.id));
+  collections.forEach((c) => ensure(c.name).collectionIds.push(c.id));
+
+  const booksIn = (fids) => allFavBooks.filter((b) => fids.includes(b.folder_id));
+  const imagesIn = (cids) => allFavImages.filter((i) => cids.includes(i.collection_id));
+
+  const active = req.query.tab != null ? (tabMap.get(norm(req.query.tab)) || null) : null;
+  const tabs = [...tabMap.values()]
+    .map((t) => ({
+      key: t.key, name: t.name, folderIds: t.folderIds, collectionIds: t.collectionIds,
+      count: booksIn(t.folderIds).length + imagesIn(t.collectionIds).length,
+    }))
+    .filter((t) => t.count > 0)
+    .map((t) => ({ ...t, active: active ? active.key === t.key : false, href: '/favourites?tab=' + encodeURIComponent(t.name) }));
+
+  const favBooks = active ? booksIn(active.folderIds) : allFavBooks;
+  const favImagesRaw = active ? imagesIn(active.collectionIds) : allFavImages;
+  const shownBooks = filt(favBooks, q);
+  // Photos are hidden while searching (search filters stories only).
+  const favImages = q ? [] : favImagesRaw;
+
+  // Stories and photos in ONE grid, newest first — no separate sections.
+  const items = [
+    ...shownBooks.map((b) => ({ type: 'story', book: b, date: b.created_at || '' })),
+    ...favImages.map((i) => ({ type: 'photo', img: i, date: i.created_at || '' })),
+  ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+  res.render('favourites', {
+    items,
+    tabs,
+    activeTab: active ? { name: active.name } : null,
+    allActive: !active,
+    allCount: allFavBooks.length + allFavImages.length,
+    storyTotal: shownBooks.length,
+    photoTotal: favImagesRaw.length,
+    query: q,
+  });
 });
 
 // ── Profile ──────────────────────────────────────────────────────────────────

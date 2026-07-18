@@ -27,7 +27,6 @@
           <div class="gallery-tabs">
             <div class="sort-toggle">
               <a href="/gallery?order=<%= order %>" class="<%= !activeCollection && !favMode ? 'active' : '' %>">All</a>
-              <a href="/gallery?order=<%= order %>&favourites=1" class="<%= favMode ? 'active' : '' %>">♥ Favourites<span class="tab-count"><%= favCount %></span></a>
               <% collections.forEach(function(c){ %>
                 <a href="/gallery?order=<%= order %>&collection=<%= c.id %>" class="<%= activeCollection && activeCollection.id === c.id ? 'active' : '' %>"><%= c.name %><span class="tab-count"><%= collectionCounts[c.id] || 0 %></span></a>
               <% }) %>
@@ -50,6 +49,7 @@
 
           <div class="gallery-bar">
             <div class="sort-toggle">
+              <a href="/gallery?order=fav<%= sortQ %>" class="<%= order === 'fav' ? 'active' : '' %>">♥ Favourites first</a>
               <a href="/gallery?order=newest<%= sortQ %>" class="<%= order === 'newest' ? 'active' : '' %>">Newest first</a>
               <a href="/gallery?order=oldest<%= sortQ %>" class="<%= order === 'oldest' ? 'active' : '' %>">Oldest first</a>
             </div>
