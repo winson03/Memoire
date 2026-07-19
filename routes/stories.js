@@ -169,15 +169,17 @@ router.get('/editor', (req, res) => {
   const folders = Folders.listForUser(u.id);
   // The user's other story titles — the editor confirms before saving a duplicate.
   const otherTitles = Books.listByUser(u.id).filter((b) => b.id !== book.id).map((b) => b.title);
-  // "Alternate ending of" targets: your other top-level stories. Excluded are
-  // this book itself and — when this book already has endings of its own — every
-  // story, since nesting is capped at one level.
   const myEndings = Books.listEndings(book.id);
-  const parentChoices = myEndings.length ? [] : Books.listByUser(u.id).filter((b) => b.id !== book.id);
   const parentBook = book.parent_book_id ? Books.findById(book.parent_book_id) : null;
+  // Stories that can be merged in as endings of this one. Scoped to this
+  // story's folder — endings are versions of the same story, and those live
+  // together — so a big library doesn't drown the picker. A story that already
+  // owns endings is excluded: nesting is capped at one level.
+  const mergeChoices = parentBook ? [] : Books.listByFolder(book.folder_id)
+    .filter((b) => b.id !== book.id && b.user_id === u.id && !Books.listEndings(b.id).length);
   res.render('editor', {
     book, photos, folders, otherTitles, statusDefs: STATUS_DEFS, themeKeys: THEME_KEYS,
-    blocks: parseBlocks(book.content), parentChoices, parentBook, myEndings,
+    blocks: parseBlocks(book.content), parentBook, myEndings, mergeChoices,
   });
 });
 
@@ -300,30 +302,42 @@ router.post('/stories/:id', (req, res) => {
     Books.setContent(book.id, JSON.stringify(parseBlocks(req.body.content)));
   }
 
-  // Alternate endings. `parent_book_id` empty means "a story of its own".
-  let attachedTo = null;
-  if (req.body.parent_book_id !== undefined) {
-    const wantId = parseInt(req.body.parent_book_id, 10);
-    const target = wantId ? Books.findById(wantId) : null;
-    const valid = target
-      && target.id !== book.id                 // can't be its own ending
-      && target.user_id === req.user.id        // must be your story
-      && !target.parent_book_id                // one level of nesting only
-      && !Books.listEndings(book.id).length;   // a story with endings can't become one
-    Books.setParent(book.id, valid ? target.id : null, req.body.ending_label);
-    attachedTo = valid ? target : null;
-    // An ending isn't publishable on its own — it inherits the story's visibility
-    // so its download link obeys the same rule the reader page does.
-    if (attachedTo && attachedTo.status !== book.status) Books.setStatus(book.id, attachedTo.status);
-  } else if (req.body.ending_label !== undefined) {
-    Books.setEndingLabel(book.id, req.body.ending_label);
+  // Alternate endings — this story is either one itself (rename / split out) or
+  // a story other stories can be merged into.
+  if (book.parent_book_id) {
+    if (req.body.detach) {
+      Books.setParent(book.id, null, null);
+      req.flash('info', 'Split back out into its own story.');
+      return res.redirect('/reader/' + book.id);
+    }
+    if (req.body.ending_label !== undefined) Books.setEndingLabel(book.id, req.body.ending_label);
   }
 
-  req.flash('info', attachedTo
-    ? `Saved as an ending of “${attachedTo.title}”.`
+  // Stories ticked in the editor's endings picker fold into this one.
+  const mergeIds = [].concat(req.body.merge_ids || [])
+    .map((n) => parseInt(n, 10))
+    .filter(Boolean);
+  let merged = 0;
+  if (mergeIds.length && !book.parent_book_id) {
+    mergeIds.forEach((id) => {
+      const target = Books.findById(id);
+      const ok = target
+        && target.id !== book.id                  // can't be its own ending
+        && target.user_id === req.user.id         // must be your story
+        && !Books.listEndings(target.id).length;  // one level of nesting only
+      if (!ok) return;
+      Books.setParent(target.id, book.id, target.ending_label || target.title);
+      // An ending isn't publishable on its own — it inherits the story's
+      // visibility so its download link obeys the reader page's rule.
+      if (target.status !== status) Books.setStatus(target.id, status);
+      merged += 1;
+    });
+  }
+
+  req.flash('info', merged
+    ? `${merged} ${merged === 1 ? 'ending' : 'endings'} merged into “${book.title}”.`
     : ({ published: 'Story published.', private: 'Saved privately.', draft: 'Draft saved.' }[status] || 'Story saved.'));
-  // An ending has no page of its own — go to its parent, already selected.
-  if (attachedTo) return res.redirect(`/reader/${attachedTo.id}?ending=${book.id}`);
+  if (merged) return res.redirect('/reader/' + book.id);
   // A story filed in a folder returns to that folder (you came from there, and
   // history-based "back" is unreliable across the create→edit redirect chain);
   // an unfiled story opens in the reader.
