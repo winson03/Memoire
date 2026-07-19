@@ -65,7 +65,7 @@
               <div class="empty"><div class="et">Nothing written yet</div><div class="eh">Open the editor and add paragraphs &amp; images to start.</div></div>
             <% } %>
           <% } else { %>
-          <% if (photos.length) { %>
+          <% if (photos.length || !endingTabs.length) { %>
             <div class="figs-view-row">
               <div class="figs-view" id="figsView" role="group" aria-label="Photo layout">
                 <button type="button" data-view="list" title="List view" aria-label="List view">☰</button>
@@ -75,26 +75,41 @@
           <% } %>
           <div class="reader-figs" id="readerFigs">
             <% if (photos.length) { %>
-              <% photos.forEach(function(m){ %>
-                <figure>
-                  <% if (m.telegram_file_id && m.kind === 'photo') { %>
-                    <div class="photo-frame"><img data-full="/media/<%= m.id %>" alt="<%= m.label || '' %>" decoding="async"></div>
-                  <% } else if (m.telegram_file_id && m.kind === 'video') { %>
-                    <div class="photo-frame"><video src="/media/<%= m.id %>#t=0.1" controls preload="metadata"></video></div>
-                  <% } else if (m.telegram_file_id && m.kind === 'pdf') { %>
-                    <div class="photo-frame pdf"><iframe src="/media/<%= m.id %>" title="<%= m.label || 'document' %>"></iframe></div>
-                  <% } else if (m.telegram_file_id) { %>
-                    <div class="photo-frame"><a class="btn btn-soft" href="/media/<%= m.id %>?download=1">⤓ Download <%= m.label || m.file_name || 'file' %></a></div>
-                  <% } else { %>
-                    <div class="photo-frame"><span class="ph">photo · <%= m.label || 'untitled' %></span></div>
-                  <% } %>
-                  <figcaption><%= m.label || '' %></figcaption>
-                </figure>
-              <% }) %>
-            <% } else { %>
+              <%- include('partials/story-figs', { media: photos }) %>
+            <% } else if (!endingTabs.length) { %>
               <div class="empty"><div class="et">No media yet</div><div class="eh">Add photos and films in the editor.</div></div>
             <% } %>
           </div>
+
+          <%
+            /* Alternate endings: the story above stays put, and this section
+               swaps between the endings' galleries. */
+          %>
+          <% if (endingTabs.length) { %>
+            <section class="endings-section">
+              <h3 class="h3">Endings</h3>
+              <div class="ending-tabs" role="tablist" aria-label="Endings">
+                <% endingTabs.forEach(function(t){ %>
+                  <a class="ending-tab <%= t.id === openEndingId ? 'on' : '' %>"
+                     href="/reader/<%= openBook.id %>?ending=<%= t.id %>"
+                     role="tab" aria-selected="<%= t.id === openEndingId ? 'true' : 'false' %>"><%= t.label %></a>
+                <% }) %>
+              </div>
+              <% if (isOwner && openEndingId) { %>
+                <div class="ending-tools">
+                  <a href="/editor?id=<%= openEndingId %>">Edit this ending</a>
+                  <a href="/stories/<%= openEndingId %>/download">⤓ Download</a>
+                </div>
+              <% } %>
+              <div class="reader-figs" id="endingFigs">
+                <% if (endingPhotos.length) { %>
+                  <%- include('partials/story-figs', { media: endingPhotos }) %>
+                <% } else { %>
+                  <div class="empty"><div class="et">Nothing in this ending yet</div><div class="eh">Open it in the editor to add photos and films.</div></div>
+                <% } %>
+              </div>
+            </section>
+          <% } %>
           <% } %>
 
           <% if (moreByAuthor.length) { %>

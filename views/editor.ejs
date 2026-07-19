@@ -108,6 +108,36 @@
               <input type="hidden" name="series" id="seriesInput" value="<%= book.series || '' %>">
             </div>
 
+            <!-- One story, several conclusions. This story either stands alone,
+                 owns a set of endings, or is one ending of another story. -->
+            <div class="glass panel">
+              <div class="media-head"><div class="t">Endings</div></div>
+              <% if (myEndings.length) { %>
+                <div class="media-hint">This story keeps its own photos. These endings sit below them in the reader, and readers switch between them with tabs.</div>
+                <ul class="ending-list">
+                  <% myEndings.forEach(function(e, i){ %>
+                    <li><span class="ending-tag"><%= i + 1 %></span> <%= (e.ending_label || '').trim() || ('Ending ' + (i + 1)) %> <a href="/editor?id=<%= e.id %>">Edit</a></li>
+                  <% }) %>
+                </ul>
+              <% } else { %>
+                <div class="media-hint">Have two versions of the same story? Attach this one to the other as an alternate ending — they merge into a single story with tabs, and this one leaves your library.</div>
+                <label class="field-label" for="parentSelect" style="font-size:12px;">Alternate ending of</label>
+                <select id="parentSelect" name="parent_book_id" class="pseudo-select" style="width:100%;cursor:pointer;">
+                  <option value="">— A story of its own —</option>
+                  <% parentChoices.forEach(function(p){ %>
+                    <option value="<%= p.id %>" <%= book.parent_book_id === p.id ? 'selected' : '' %>><%= p.title %></option>
+                  <% }) %>
+                </select>
+                <div style="margin-top:14px;">
+                  <label class="field-label" for="endingLabel" style="font-size:12px;">Name of this ending</label>
+                  <input id="endingLabel" class="input" name="ending_label" value="<%= book.ending_label || '' %>" placeholder="e.g. Dead body" maxlength="60">
+                </div>
+                <% if (parentBook) { %>
+                  <div class="media-hint" style="margin-top:12px;">Currently an ending of <a href="/reader/<%= parentBook.id %>?ending=<%= book.id %>">“<%= parentBook.title %>”</a>. Choose “A story of its own” to split it back out.</div>
+                <% } %>
+              <% } %>
+            </div>
+
             <% if (isNovel) { %>
             <div class="glass panel">
               <div class="media-head">

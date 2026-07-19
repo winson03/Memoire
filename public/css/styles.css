@@ -279,6 +279,36 @@ a { color: inherit; text-decoration: none; }
 /* No per-figure entrance animation: with hundreds of photos, animating every
    figure at once spikes compositing work on mobile. */
 .reader-figs figure { margin: 0; }
+/* Alternate endings: one story, several conclusions. The story's own photos sit
+   above; this section hangs below them, and its tab strip swaps which ending's
+   photos show. On narrow screens the strip scrolls sideways rather than
+   wrapping, so the gallery below never shifts down. */
+.endings-section { margin-top: 38px; padding-top: 26px; border-top: 1px solid rgba(120,80,50,0.14); }
+.endings-section .h3 { margin: 0 0 14px; }
+.ending-tools { display: flex; gap: 16px; margin: -6px 0 16px; font-size: 13px; }
+.ending-tools a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.ending-tools a:hover { text-decoration: underline; }
+.ending-tabs { display: flex; gap: 4px; margin-bottom: 18px; padding: 4px; border-radius: 100px; background: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.8); backdrop-filter: blur(8px); overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
+.ending-tabs::-webkit-scrollbar { display: none; }
+.ending-tab { padding: 8px 18px; border-radius: 100px; font-size: 13.5px; font-weight: 600; white-space: nowrap; color: rgba(58,50,42,0.6); text-decoration: none; transition: background .2s, color .2s; }
+.ending-tab:hover { background: rgba(194,104,62,0.08); }
+.ending-tab.on { background: linear-gradient(135deg, var(--accent), var(--accent-alt)); color: #FFF8F0; box-shadow: 0 4px 12px rgba(194,104,62,0.25); }
+/* Library select mode: story covers take a tick like gallery tiles do. Photos
+   in the same mixed grid dim out — they can't become endings. */
+.cover-grid.select-mode .cover-card { cursor: pointer; position: relative; }
+.cover-grid.select-mode .cover-card:not(.selected) .cover-spine { opacity: 0.72; }
+.cover-grid.select-mode .cover-card.selected .cover-spine { outline: 3px solid var(--accent); outline-offset: 2px; }
+.cover-grid.select-mode .cover-card .tile-check { display: flex; }
+.cover-grid.select-mode .heart-btn { display: none; }
+.cover-grid.select-mode .lib-photo { opacity: 0.4; pointer-events: none; }
+.cover-card .tile-check { top: 10px; right: 10px; }
+.cover-card.selected .tile-check { color: #fff; background: var(--accent); }
+/* Editor-side summary of a story's endings. */
+.ending-list { list-style: none; margin: 0 0 16px; padding: 0; font-size: 14px; }
+.ending-list li { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-bottom: 1px solid rgba(120,80,50,0.08); }
+.ending-list li:last-child { border-bottom: none; }
+.ending-list a { margin-left: auto; font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600; }
+.ending-tag { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; background: rgba(194,104,62,0.14); color: var(--accent); }
 /* Grid layout toggle: up to 4 photos per row (2 on small screens). */
 .figs-view-row { text-align: right; margin-bottom: 16px; }
 .figs-view { display: inline-flex; gap: 2px; background: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.8); border-radius: 100px; padding: 3px; backdrop-filter: blur(8px); }

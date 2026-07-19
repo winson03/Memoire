@@ -35,13 +35,22 @@ router.use(ensureAuth);
 
 // ── Reader ──────────────────────────────────────────────────────────────────
 router.get('/reader/:id', (req, res) => {
-  const book = Books.findById(parseInt(req.params.id, 10));
+  let book = Books.findById(parseInt(req.params.id, 10));
   if (!book) return res.redirect('/dashboard');
+  // An alternate ending has no page of its own — it reads as a tab on its
+  // parent story, so bounce there with that ending preselected.
+  if (book.parent_book_id) return res.redirect(`/reader/${book.parent_book_id}?ending=${book.id}`);
   if (book.status !== 'published' && !ownerOnly(book, req)) return res.redirect('/dashboard');
 
   if (book.status === 'published' && !ownerOnly(book, req)) Books.incrementViews(book.id);
 
+  // The story's own photos always show. Its endings live in their own tabbed
+  // section below, showing one ending's photos at a time.
   const photos = Media.listForBook(book.id);
+  const endingTabs = Books.endingTabs(book);
+  const wanted = parseInt(req.query.ending, 10);
+  const openEnding = endingTabs.find((t) => t.id === wanted) || endingTabs[0] || null;
+  const endingPhotos = openEnding ? Media.listForBook(openEnding.id) : [];
   // Only show other books by this author that are public (published) — or the
   // viewer's own — so private/draft stories never leak.
   const moreCandidates = Books.listByAuthor(book.author)
@@ -56,7 +65,11 @@ router.get('/reader/:id', (req, res) => {
   const moreByAuthor = moreCandidates.slice(0, 3);
   const faved = Favourites.idsForUser(req.user.id).includes(book.id);
 
-  res.render('reader', { openBook: book, photos, moreByAuthor, faved, isOwner: ownerOnly(book, req), blocks: parseBlocks(book.content) });
+  res.render('reader', {
+    openBook: book, photos, moreByAuthor, faved, isOwner: ownerOnly(book, req),
+    blocks: parseBlocks(book.content), endingTabs, endingPhotos,
+    openEndingId: openEnding ? openEnding.id : null,
+  });
 });
 
 // ── Download a story as a zip (folder): its images in order + a text file ──────
@@ -156,7 +169,16 @@ router.get('/editor', (req, res) => {
   const folders = Folders.listForUser(u.id);
   // The user's other story titles — the editor confirms before saving a duplicate.
   const otherTitles = Books.listByUser(u.id).filter((b) => b.id !== book.id).map((b) => b.title);
-  res.render('editor', { book, photos, folders, otherTitles, statusDefs: STATUS_DEFS, themeKeys: THEME_KEYS, blocks: parseBlocks(book.content) });
+  // "Alternate ending of" targets: your other top-level stories. Excluded are
+  // this book itself and — when this book already has endings of its own — every
+  // story, since nesting is capped at one level.
+  const myEndings = Books.listEndings(book.id);
+  const parentChoices = myEndings.length ? [] : Books.listByUser(u.id).filter((b) => b.id !== book.id);
+  const parentBook = book.parent_book_id ? Books.findById(book.parent_book_id) : null;
+  res.render('editor', {
+    book, photos, folders, otherTitles, statusDefs: STATUS_DEFS, themeKeys: THEME_KEYS,
+    blocks: parseBlocks(book.content), parentChoices, parentBook, myEndings,
+  });
 });
 
 // ── Bulk folder import: one folder → one private story ───────────────────────
@@ -187,6 +209,15 @@ router.post('/stories/import', (req, res) => {
     series: dest ? dest.name : null,
     folder_id: dest ? dest.id : null,
   });
+
+  // Nested import: a sub-folder becomes an alternate ending of the story made
+  // from its parent folder, so the whole tree lands as one story with tabs.
+  const parent = req.body.parent_id ? Books.findById(parseInt(req.body.parent_id, 10)) : null;
+  const label = (req.body.ending_label || '').trim().slice(0, 60) || null;
+  if (parent && ownerOnly(parent, req) && !parent.parent_book_id) {
+    Books.setParent(book.id, parent.id, label || title);
+  }
+
   res.json({ id: book.id });
 });
 
@@ -209,6 +240,36 @@ router.post('/stories/import/notify-complete', (req, res) => {
   Notifications.create({ user_id: req.user.id, type: 'upload', book_id: null, message });
 
   res.json({ ok: true, notification: { message, href: dest ? '/folders?open=' + dest.id : '/library' } });
+});
+
+// ── Bulk: make several stories alternate endings of one story ─────────────────
+// Powers the library's select mode → "Make endings of…". Same guards as the
+// editor's single-story path; unusable picks are skipped and counted rather
+// than failing the whole batch.
+router.post('/stories/bulk-endings', (req, res) => {
+  const ids = Array.isArray(req.body.ids) ? req.body.ids.map((n) => parseInt(n, 10)).filter(Boolean) : [];
+  const parent = Books.findById(parseInt(req.body.parent_id, 10));
+  if (!ids.length || !ownerOnly(parent, req) || parent.parent_book_id) {
+    return res.status(400).json({ error: 'Pick a story of your own to hold the endings.' });
+  }
+
+  let moved = 0;
+  let skipped = 0;
+  ids.forEach((id) => {
+    const book = Books.findById(id);
+    const ok = book
+      && book.id !== parent.id                 // a story can't be its own ending
+      && book.user_id === req.user.id
+      && !Books.listEndings(book.id).length;   // it must not own endings itself
+    if (!ok) { skipped += 1; return; }
+    // Keep whatever ending name it already had; otherwise its title names the
+    // tab, which is the useful default for "Fridge Dead Body" → "Dead body".
+    Books.setParent(book.id, parent.id, book.ending_label || book.title);
+    if (parent.status !== book.status) Books.setStatus(book.id, parent.status);
+    moved += 1;
+  });
+
+  res.json({ ok: true, moved, skipped, parent: { id: parent.id, title: parent.title } });
 });
 
 // ── Create / Update story ─────────────────────────────────────────────────────
@@ -239,7 +300,30 @@ router.post('/stories/:id', (req, res) => {
     Books.setContent(book.id, JSON.stringify(parseBlocks(req.body.content)));
   }
 
-  req.flash('info', { published: 'Story published.', private: 'Saved privately.', draft: 'Draft saved.' }[status] || 'Story saved.');
+  // Alternate endings. `parent_book_id` empty means "a story of its own".
+  let attachedTo = null;
+  if (req.body.parent_book_id !== undefined) {
+    const wantId = parseInt(req.body.parent_book_id, 10);
+    const target = wantId ? Books.findById(wantId) : null;
+    const valid = target
+      && target.id !== book.id                 // can't be its own ending
+      && target.user_id === req.user.id        // must be your story
+      && !target.parent_book_id                // one level of nesting only
+      && !Books.listEndings(book.id).length;   // a story with endings can't become one
+    Books.setParent(book.id, valid ? target.id : null, req.body.ending_label);
+    attachedTo = valid ? target : null;
+    // An ending isn't publishable on its own — it inherits the story's visibility
+    // so its download link obeys the same rule the reader page does.
+    if (attachedTo && attachedTo.status !== book.status) Books.setStatus(book.id, attachedTo.status);
+  } else if (req.body.ending_label !== undefined) {
+    Books.setEndingLabel(book.id, req.body.ending_label);
+  }
+
+  req.flash('info', attachedTo
+    ? `Saved as an ending of “${attachedTo.title}”.`
+    : ({ published: 'Story published.', private: 'Saved privately.', draft: 'Draft saved.' }[status] || 'Story saved.'));
+  // An ending has no page of its own — go to its parent, already selected.
+  if (attachedTo) return res.redirect(`/reader/${attachedTo.id}?ending=${book.id}`);
   // A story filed in a folder returns to that folder (you came from there, and
   // history-based "back" is unreliable across the create→edit redirect chain);
   // an unfiled story opens in the reader.
@@ -250,8 +334,10 @@ router.post('/stories/:id', (req, res) => {
 router.post('/stories/:id/delete', (req, res) => {
   const book = Books.findById(parseInt(req.params.id, 10));
   if (!ownerOnly(book, req)) return res.status(403).send('Forbidden');
-  // Remove the stored files from disk before the rows cascade away.
-  Media.listForBook(book.id).forEach((m) => storage.remove(m.telegram_file_id));
+  // Remove the stored files from disk before the rows cascade away — including
+  // those of any alternate endings, which the DB cascade deletes with the parent.
+  [book, ...Books.listEndings(book.id)]
+    .forEach((b) => Media.listForBook(b.id).forEach((m) => storage.remove(m.telegram_file_id)));
   Books.remove(book.id);
   res.redirect(req.body.redirect || '/dashboard');
 });

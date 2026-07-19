@@ -201,6 +201,9 @@ router.get('/library', (req, res) => {
     totalPages,
     query: q,
     sort, // the active library sort mode (remembered in the session)
+    // Every story you own, for the "Make endings of…" chooser — the grid is
+    // paginated, so the page's own cards aren't a complete list of targets.
+    allStories: books.map((b) => ({ id: b.id, title: b.title })),
     folders, // feeds the bulk-import popup's "add to folder" dropdown
     collections, // feeds the gallery-import popup's "assign to collection" chooser
   });
@@ -622,7 +625,7 @@ router.post('/admin/users/:id/delete', ensureAdmin, (req, res) => {
     return res.redirect('/admin/users');
   }
   // Remove this user's media files from disk before the rows cascade away.
-  Books.listByUser(id).forEach((b) => Media.listForBook(b.id).forEach((m) => storage.remove(m.telegram_file_id)));
+  Books.listByUserIncludingEndings(id).forEach((b) => Media.listForBook(b.id).forEach((m) => storage.remove(m.telegram_file_id)));
   if (target.avatar_file_id) storage.remove(target.avatar_file_id);
   Users.remove(id);
   req.flash('info', `Deleted ${target.name} and their stories.`);

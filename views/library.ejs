@@ -24,6 +24,10 @@
               <%= storyTotal %> <%= storyTotal === 1 ? 'story' : 'stories' %><% if (photoTotal) { %> · <%= photoTotal %> <%= photoTotal === 1 ? 'photo' : 'photos' %><% } %><%= activeTab ? (' in “' + activeTab.name + '”') : ' in your library' %>.
             <% } %>
           </p>
+          <div style="display:flex;align-items:center;gap:10px;">
+          <% if (storyTotal > 1) { %>
+            <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:100px;font-size:13px;" id="librarySelectBtn">Select</button>
+          <% } %>
           <label class="folder-sort">Sort
             <select id="librarySortSelect">
               <option value="favourites" <%= sort === 'favourites' ? 'selected' : '' %>>Favourites first</option>
@@ -33,6 +37,17 @@
               <option value="za" <%= sort === 'za' ? 'selected' : '' %>>Name Z–A</option>
             </select>
           </label>
+          </div>
+        </div>
+
+        <!-- Select-mode action bar: pick several stories, then fold them into one
+             story as its alternate endings. Photos aren't selectable here. -->
+        <div class="assign-bar assign-bar-top" id="librarySelectBar" hidden>
+          <span class="assign-count" id="librarySelectCount">0 selected</span>
+          <div class="assign-actions">
+            <button type="button" class="btn btn-soft" id="librarySelectCancel">Cancel</button>
+            <button type="button" class="btn btn-accent" id="librarySelectEndings">Make endings of…</button>
+          </div>
         </div>
 
         <div class="panel" id="importDropzone" style="padding:16px 18px;margin-bottom:18px;">
@@ -46,6 +61,7 @@
         <input type="file" id="importGalleryInput" accept="image/*,video/*" multiple hidden>
         <script type="application/json" id="importFoldersData"><%- JSON.stringify(folders.map(function(f){ return { id: f.id, name: f.name }; })).replace(/</g, '\\u003c') %></script>
         <script type="application/json" id="importCollectionsData"><%- JSON.stringify(collections.map(function(c){ return { id: c.id, name: c.name }; })).replace(/</g, '\\u003c') %></script>
+        <script type="application/json" id="libraryStoriesData"><%- JSON.stringify(allStories).replace(/</g, '\\u003c') %></script>
 
         <% if (!items.length) { %>
           <div class="empty">

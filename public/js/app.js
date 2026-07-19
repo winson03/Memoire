@@ -553,6 +553,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Library: view-only gallery photos merged into the folder tabs.
   initLibraryGallery();
 
+  // Library: select several stories and fold them into one as its endings.
+  initLibraryEndings();
+
   // Favourites page: favourited gallery photos (heart to remove, click to zoom).
   initFavouritesGallery();
 
@@ -940,6 +943,32 @@ function readEntryFiles(entry) {
   });
 }
 
+// One level down a dropped folder: the files sitting directly inside it, and
+// each direct sub-folder flattened into its own bundle. That shape is what lets
+// "a folder of two folders" become one story with two endings — a fully
+// recursive read would lose the boundary between them.
+function readDirShallow(entry) {
+  return new Promise((resolve) => {
+    const reader = entry.createReader();
+    const acc = [];
+    const readBatch = () => reader.readEntries(async (batch) => {
+      if (batch.length) { acc.push(...batch); readBatch(); return; }
+      const files = [];
+      const subs = [];
+      for (const en of acc) {
+        if (en.isFile) {
+          const [f] = await readEntryFiles(en);
+          if (f) files.push(f);
+        } else if (en.isDirectory) {
+          subs.push({ name: en.name, files: await readEntryFiles(en) });
+        }
+      }
+      resolve({ files, subs });
+    }, () => resolve({ files: [], subs: [] }));
+    readBatch();
+  });
+}
+
 // Recursively gather File objects from a File System Access directory handle
 // (nested folders included, mirroring the drag-and-drop path).
 async function collectDirFiles(dirHandle) {
@@ -972,11 +1001,37 @@ function initFolderImport() {
   const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 
   // Keep only photo/video files, sort everything by name, drop empty folders.
+  // `subs` (direct sub-folders) are normalised the same way and kept alongside
+  // the loose files — how they become stories is decided at import time.
   function normalizeGroups(groups) {
     return groups
-      .map((g) => ({ name: g.name, files: g.files.filter(isMedia).sort(byName) }))
-      .filter((g) => g.files.length)
+      .map((g) => ({
+        name: g.name,
+        files: (g.files || []).filter(isMedia).sort(byName),
+        subs: (g.subs || [])
+          .map((s) => ({ name: s.name, files: (s.files || []).filter(isMedia).sort(byName) }))
+          .filter((s) => s.files.length)
+          .sort(byName),
+      }))
+      .filter((g) => g.files.length || g.subs.length)
       .sort(byName);
+  }
+
+  // A nested folder becomes one story plus its endings: loose files at the top
+  // are the story's own photos, and every sub-folder becomes an ending shown
+  // below them. A folder holding nothing but sub-folders makes a story with no
+  // photos of its own — just its endings.
+  function toStoryPlan(g) {
+    return { name: g.name, files: g.files, label: null, endings: g.subs };
+  }
+
+  // "Separate stories" mode: the same tree, flattened the way it used to import
+  // — every sub-folder its own story, loose files a story named after the parent.
+  function toSeparateStories(g) {
+    if (!g.subs.length) return [{ name: g.name, files: g.files, label: null, endings: [] }];
+    const out = g.files.length ? [{ name: g.name, files: g.files, label: null, endings: [] }] : [];
+    g.subs.forEach((s) => out.push({ name: s.name, files: s.files, label: null, endings: [] }));
+    return out;
   }
 
   // The user's app folders (for the "add to folder" dropdown), embedded by the
@@ -1009,6 +1064,13 @@ function initFolderImport() {
           Drop folders here, or <span style="text-decoration:underline;">click to add a folder</span>
         </div>
         <div id="importList" style="max-height:230px;overflow:auto;margin:10px 0;"></div>
+        <div id="importNestRow" hidden style="margin:4px 0 14px;">
+          <label class="field-label" style="font-size:12px;">Folders inside a folder become</label>
+          <div class="sort-toggle" id="importNestMode" style="width:100%;">
+            <a href="#" data-mode="endings" class="active">Endings of one story</a>
+            <a href="#" data-mode="stories">Separate stories</a>
+          </div>
+        </div>
         <label class="field-label" style="font-size:12px;">Add the new stories to</label>
         <select class="pseudo-select" id="importIntoFolder" style="width:100%;cursor:pointer;">${folderOptions}</select>
         <div class="dialog-actions">
@@ -1022,24 +1084,41 @@ function initFolderImport() {
     const target = backdrop.querySelector('#importDropTarget');
     const list = backdrop.querySelector('#importList');
     const goBtn = backdrop.querySelector('#importGo');
+    const nestRow = backdrop.querySelector('#importNestRow');
     const pending = [];
+    let nestMode = 'endings'; // how sub-folders import: 'endings' | 'stories'
 
     const close = () => { backdrop.remove(); document.removeEventListener('keydown', onKey); dlg = null; };
     const onKey = (e) => { if (e.key === 'Escape') close(); };
 
+    // How many stories the current list will actually create, and how each
+    // folder breaks down — a nested folder reads "1 story · 2 endings".
+    function plansFor(g) { return nestMode === 'endings' ? [toStoryPlan(g)] : toSeparateStories(g); }
+    function countFiles(g) { return g.files.length + g.subs.reduce((n, s) => n + s.files.length, 0); }
+
     function rerender() {
+      const nested = pending.some((g) => g.subs.length);
+      nestRow.hidden = !nested;
       if (!pending.length) {
         list.innerHTML = '<div style="opacity:.55;font-size:13px;padding:6px 2px;">No folders added yet.</div>';
       } else {
-        list.innerHTML = pending.map((g, i) => `
+        list.innerHTML = pending.map((g, i) => {
+          const plans = plansFor(g);
+          const endings = plans.reduce((n, p) => n + p.endings.length, 0);
+          const shape = plans.length > 1
+            ? `${plans.length} stories`
+            : (endings ? `1 story · ${endings} ending${endings === 1 ? '' : 's'}` : '1 story');
+          return `
           <div style="display:flex;align-items:center;gap:10px;padding:7px 2px;">
             <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(g.name)}</span>
-            <span style="opacity:.6;font-size:12px;flex-shrink:0;">${g.files.length} file${g.files.length === 1 ? '' : 's'}</span>
+            <span style="opacity:.6;font-size:12px;flex-shrink:0;">${countFiles(g)} file${countFiles(g) === 1 ? '' : 's'} · ${shape}</span>
             <button type="button" data-rm="${i}" title="Remove" style="border:none;background:none;cursor:pointer;font-size:16px;opacity:.6;line-height:1;">×</button>
-          </div>`).join('');
+          </div>`;
+        }).join('');
       }
+      const stories = pending.reduce((n, g) => n + plansFor(g).length, 0);
       goBtn.disabled = !pending.length;
-      goBtn.textContent = pending.length ? `Import ${pending.length} ${pending.length === 1 ? 'story' : 'stories'}` : 'Import';
+      goBtn.textContent = stories ? `Import ${stories} ${stories === 1 ? 'story' : 'stories'}` : 'Import';
     }
 
     // Add folders, keeping only those with media and skipping duplicates (by
@@ -1069,6 +1148,15 @@ function initFolderImport() {
       if (rm) { pending.splice(Number(rm.dataset.rm), 1); rerender(); }
     });
 
+    backdrop.querySelector('#importNestMode').addEventListener('click', (e) => {
+      const a = e.target.closest('[data-mode]');
+      if (!a) return;
+      e.preventDefault();
+      nestMode = a.dataset.mode;
+      backdrop.querySelectorAll('#importNestMode a').forEach((el) => el.classList.toggle('active', el === a));
+      rerender();
+    });
+
     target.addEventListener('click', async () => { const g = await pickFolderGroups(); if (g) addGroups(g); });
     target.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; target.classList.add('drop-active'); });
     target.addEventListener('dragleave', () => target.classList.remove('drop-active'));
@@ -1085,9 +1173,9 @@ function initFolderImport() {
     goBtn.addEventListener('click', async () => {
       if (!pending.length) return;
       const folderId = backdrop.querySelector('#importIntoFolder').value || null;
-      const groups = pending.slice();
+      const plans = pending.flatMap(plansFor);
       close();
-      await importGroups(groups, folderId);
+      await importGroups(plans, folderId);
     });
     document.addEventListener('keydown', onKey);
 
@@ -1099,77 +1187,102 @@ function initFolderImport() {
   // Kept name for existing drop callers — funnel into the accumulating dialog.
   function confirmAndImport(groups) { openImportDialog(groups); }
 
-  // groups: [{ name, files }] — each becomes one private story named after the
-  // folder, files in name order, first photo as the cover, filed into the
-  // chosen app folder (folderId may be null).
-  async function importGroups(groups, folderId) {
-    const eta = makeUploadEta(groups.flatMap((g) => g.files));
+  // plans: [{ name, files, label, endings: [{name, files}] }] — each plan makes
+  // one private story named after the folder (files in name order, first photo
+  // as the cover, filed into the chosen app folder), plus one extra story per
+  // ending, attached to it and hidden from the library.
+  async function importGroups(plans, folderId) {
+    const allFiles = plans.flatMap((p) => p.files.concat(p.endings.flatMap((e) => e.files)));
+    const eta = makeUploadEta(allFiles);
     let storyNo = 0;
     let storiesDone = 0, photosDone = 0; // totals for the completion notification
-    const label = () => `Importing story ${storyNo}/${groups.length} · ${eta.text()}…`;
+    const label = () => `Importing story ${storyNo}/${plans.length} · ${eta.text()}…`;
     const ticker = setInterval(() => show(label()), 1000);
+
+    // Create one story and fill it. `parentId` set makes it an alternate ending
+    // of that story instead of a library entry of its own. Returns its id, or
+    // null if it could not be created (its files are still marked done so the
+    // ETA stays honest).
+    async function makeStory({ title, files, endingLabel, parentId }) {
+      let id = null;
+      try {
+        const createRes = await fetch('/stories/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            folder_id: parentId ? null : folderId, // endings aren't filed on their own
+            parent_id: parentId || null,
+            ending_label: endingLabel || null,
+          }),
+        });
+        if (createRes.ok) id = (await createRes.json()).id;
+      } catch (_) { /* fall through */ }
+      if (!id) { files.forEach((f) => eta.fileDone(f)); return null; }
+
+      // Upload the folder's files, a couple at a time, remembering each media id.
+      const ids = new Array(files.length).fill(null);
+      const queue = files.map((file, idx) => ({ file, idx }));
+      const worker = async () => {
+        for (let it = queue.shift(); it; it = queue.shift()) {
+          try {
+            let res;
+            // Photos/videos go browser → Google Drive (bypass the server);
+            // anything else relays through the server as before.
+            if (wantsDriveDirect(it.file)) {
+              const df = await uploadToDrive(it.file, (sent) => eta.progress(it.file, sent));
+              res = await fetch(`/stories/${id}/media/register-drive`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  drive_id: df.id,
+                  file_name: it.file.name,
+                  mime: it.file.type,
+                  label: it.file.name.replace(/\.[^.]+$/, ''),
+                }),
+              });
+            } else {
+              const fd = new FormData();
+              fd.append('file', it.file);
+              fd.append('label', it.file.name.replace(/\.[^.]+$/, ''));
+              res = await postFormWithProgress(`/stories/${id}/media`, fd, (sent) => eta.progress(it.file, sent));
+            }
+            if (res.ok) {
+              const item = ((await res.json()).items || [])[0];
+              if (item) ids[it.idx] = item.id;
+            }
+          } catch (_) { /* skip failed file */ }
+          eta.fileDone(it.file);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(2, files.length) }, worker));
+
+      // Uploads finish out of order — persist the by-name order.
+      const order = ids.filter((x) => x != null);
+      photosDone += order.length;
+      if (order.length > 1) {
+        await fetch(`/stories/${id}/media/reorder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order }),
+        }).catch(() => {});
+      }
+      return id;
+    }
+
     try {
-      for (const g of groups) {
+      for (const p of plans) {
         storyNo += 1;
         show(label());
-        let id = null;
-        try {
-          const createRes = await fetch('/stories/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: g.name, folder_id: folderId }),
-          });
-          if (createRes.ok) id = (await createRes.json()).id;
-        } catch (_) { /* fall through */ }
-        if (!id) { g.files.forEach((f) => eta.fileDone(f)); continue; } // skip folder, keep ETA honest
+        const parentId = await makeStory({ title: p.name, files: p.files, endingLabel: p.label });
+        if (!parentId) {
+          // The story failed — its endings have nothing to hang off, so skip them.
+          p.endings.forEach((e) => e.files.forEach((f) => eta.fileDone(f)));
+          continue;
+        }
         storiesDone += 1;
-
-        // Upload the folder's files, 3 at a time, remembering each media id.
-        const ids = new Array(g.files.length).fill(null);
-        const queue = g.files.map((file, idx) => ({ file, idx }));
-        const worker = async () => {
-          for (let it = queue.shift(); it; it = queue.shift()) {
-            try {
-              let res;
-              // Photos/videos go browser → Google Drive (bypass the server);
-              // anything else relays through the server as before.
-              if (wantsDriveDirect(it.file)) {
-                const df = await uploadToDrive(it.file, (sent) => eta.progress(it.file, sent));
-                res = await fetch(`/stories/${id}/media/register-drive`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    drive_id: df.id,
-                    file_name: it.file.name,
-                    mime: it.file.type,
-                    label: it.file.name.replace(/\.[^.]+$/, ''),
-                  }),
-                });
-              } else {
-                const fd = new FormData();
-                fd.append('file', it.file);
-                fd.append('label', it.file.name.replace(/\.[^.]+$/, ''));
-                res = await postFormWithProgress(`/stories/${id}/media`, fd, (sent) => eta.progress(it.file, sent));
-              }
-              if (res.ok) {
-                const item = ((await res.json()).items || [])[0];
-                if (item) ids[it.idx] = item.id;
-              }
-            } catch (_) { /* skip failed file */ }
-            eta.fileDone(it.file);
-          }
-        };
-        await Promise.all(Array.from({ length: Math.min(2, g.files.length) }, worker));
-
-        // Uploads finish out of order — persist the by-name order.
-        const order = ids.filter((x) => x != null);
-        photosDone += order.length;
-        if (order.length > 1) {
-          await fetch(`/stories/${id}/media/reorder`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order }),
-          }).catch(() => {});
+        for (const e of p.endings) {
+          await makeStory({ title: e.name, files: e.files, endingLabel: e.name, parentId });
         }
       }
     } finally {
@@ -1198,7 +1311,10 @@ function initFolderImport() {
       .filter((en) => en && en.isDirectory);
     if (!entries.length) return null;
     const groups = [];
-    for (const d of entries) groups.push({ name: d.name, files: await readEntryFiles(d) });
+    for (const d of entries) {
+      const { files, subs } = await readDirShallow(d);
+      groups.push({ name: d.name, files, subs });
+    }
     return groups;
   }
 
@@ -1223,14 +1339,15 @@ function initFolderImport() {
       if (!input) return null;
       return new Promise((resolve) => { pendingPickerResolve = resolve; input.click(); });
     }
-    const groups = [];
+    // One group for the picked folder, its sub-folders kept separate so they can
+    // become endings (or separate stories — the dialog decides).
+    const subs = [];
     const loose = [];
     for await (const entry of dir.values()) {
-      if (entry.kind === 'directory') groups.push({ name: entry.name, files: await collectDirFiles(entry) });
+      if (entry.kind === 'directory') subs.push({ name: entry.name, files: await collectDirFiles(entry) });
       else { try { loose.push(await entry.getFile()); } catch (_) { /* unreadable */ } }
     }
-    if (loose.length) groups.push({ name: dir.name, files: loose });
-    return groups;
+    return [{ name: dir.name, files: loose, subs }];
   }
 
   // Button → open the accumulating import dialog.
@@ -1242,14 +1359,22 @@ function initFolderImport() {
   // awaiting the picker, or opens the dialog directly.
   if (input) {
     input.addEventListener('change', async () => {
+      // "Parent/Sub/x.png" → a sub-folder of the picked parent; "Parent/x.png" →
+      // loose inside it. Same one-group-with-subs shape as the other pickers.
+      const files = Array.from(input.files || []);
+      const rootName = ((files[0] || {}).webkitRelativePath || '').split('/')[0] || 'Import';
+      const loose = [];
       const map = new Map();
-      for (const f of Array.from(input.files || [])) {
+      for (const f of files) {
         const seg = (f.webkitRelativePath || f.name).split('/').filter(Boolean);
-        const key = seg.length > 2 ? seg[1] : seg[0];
-        if (!map.has(key)) map.set(key, []);
-        map.get(key).push(f);
+        if (seg.length > 2) {
+          if (!map.has(seg[1])) map.set(seg[1], []);
+          map.get(seg[1]).push(f);
+        } else {
+          loose.push(f);
+        }
       }
-      const groups = [...map.entries()].map(([name, files]) => ({ name, files }));
+      const groups = [{ name: rootName, files: loose, subs: [...map.entries()].map(([name, fs]) => ({ name, files: fs })) }];
       input.value = '';
       if (pendingPickerResolve) { const r = pendingPickerResolve; pendingPickerResolve = null; r(groups); }
       else openImportDialog(groups); // input used directly (no dialog awaiting)
@@ -1797,17 +1922,21 @@ function initFolderSort() {
 // ── Reader: grid/list toggle for a photo story's images ─────────────────────
 // The choice is remembered in localStorage, so it survives refresh/return.
 function initReaderFigs() {
-  const figs = document.getElementById('readerFigs');
+  // A story with alternate endings renders two galleries — its own and the open
+  // ending's. One toggle drives both.
+  const galleries = Array.from(document.querySelectorAll('.reader-figs'));
   const toggle = document.getElementById('figsView');
-  if (!figs || !toggle) return;
+  if (!galleries.length || !toggle) return;
   const KEY = 'readerFigsView';
   const buttons = toggle.querySelectorAll('button[data-view]');
 
   function apply(view) {
-    figs.classList.toggle('grid', view === 'grid');
+    galleries.forEach((figs) => {
+      figs.classList.toggle('grid', view === 'grid');
+      figs.dispatchEvent(new CustomEvent('reader:viewchange')); // reload loaded imgs at the new size
+    });
     buttons.forEach((b) => b.classList.toggle('active', b.dataset.view === view));
     try { localStorage.setItem(KEY, view); } catch (_) { /* private mode */ }
-    figs.dispatchEvent(new CustomEvent('reader:viewchange')); // reload loaded imgs at the new size
   }
 
   let saved = 'list';
@@ -1850,12 +1979,12 @@ function windowImages(imgs, widthFor, refresh) {
 }
 
 function initReaderFigWindow() {
-  const figs = document.getElementById('readerFigs');
-  if (figs) {
+  // Both the story's gallery and its open ending's are windowed independently.
+  document.querySelectorAll('.reader-figs').forEach((figs) => {
     // Grid tiles are small (~2-4 per row); list images span the column.
     windowImages(Array.from(figs.querySelectorAll('img[data-full]')),
       () => (figs.classList.contains('grid') ? 640 : 1080), figs);
-  }
+  });
   const body = document.querySelector('.story-body');
   if (body) windowImages(Array.from(body.querySelectorAll('img[data-full]')), () => 1080, null);
 }
@@ -1894,6 +2023,97 @@ function windowMedia(els, widthFor) {
 // ── Library: view-only gallery photos shown under the folder tabs ───────────
 // The photos live on the dedicated /gallery page for upload/management; here we
 // just render memory-bounded thumbnails/videos and open a lightbox on click.
+// Library select mode: tick several story covers, then fold them into one story
+// as its alternate endings. Photos in the mixed grid stay untouchable — only
+// cover cards take a tick.
+function initLibraryEndings() {
+  const grid = document.getElementById('libraryCombined');
+  const selectBtn = document.getElementById('librarySelectBtn');
+  if (!grid || !selectBtn) return;
+  const bar = document.getElementById('librarySelectBar');
+  const countEl = document.getElementById('librarySelectCount');
+
+  const selectedCards = () => grid.querySelectorAll('.cover-card.selected');
+  const selectedIds = () => [...selectedCards()].map((c) => c.dataset.bookId);
+  const update = () => {
+    const n = selectedCards().length;
+    if (countEl) countEl.textContent = `${n} ${n === 1 ? 'story' : 'stories'} selected`;
+  };
+  const exit = () => {
+    grid.classList.remove('select-mode');
+    selectedCards().forEach((c) => c.classList.remove('selected'));
+    if (bar) bar.hidden = true;
+  };
+
+  selectBtn.addEventListener('click', () => {
+    grid.classList.add('select-mode');
+    if (bar) bar.hidden = false;
+    update();
+  });
+  document.getElementById('librarySelectCancel').addEventListener('click', exit);
+
+  // Capture phase: in select mode a click ticks the card instead of reaching the
+  // card's own data-href navigation handler (bound in the bubble phase).
+  grid.addEventListener('click', (e) => {
+    if (!grid.classList.contains('select-mode')) return;
+    const card = e.target.closest('.cover-card');
+    e.preventDefault();
+    e.stopPropagation();
+    if (!card) return;
+    card.classList.toggle('selected');
+    update();
+  }, true);
+
+  function stories() {
+    const el = document.getElementById('libraryStoriesData');
+    try { return el ? JSON.parse(el.textContent) : []; } catch (_) { return []; }
+  }
+
+  document.getElementById('librarySelectEndings').addEventListener('click', () => {
+    const ids = selectedIds();
+    if (!ids.length) return;
+    // The story that keeps its place in the library — the selected ones become
+    // its endings, so it can't be one of them.
+    const opts = stories().filter((s) => !ids.includes(String(s.id)));
+    if (!opts.length) {
+      showToast('Leave at least one story unselected to hold the endings', 'error');
+      return;
+    }
+    const backdrop = document.createElement('div');
+    backdrop.className = 'dialog-backdrop';
+    backdrop.innerHTML =
+      '<div class="dialog-card" role="dialog" aria-modal="true">' +
+      `<h3>Make ${ids.length} ${ids.length === 1 ? 'story an ending' : 'stories endings'} of…</h3>` +
+      '<p>They keep their own photos and leave your library — readers switch between them as tabs on the story you pick.</p>' +
+      '<div class="chooser">' +
+      opts.map((s) => `<button type="button" class="chooser-opt" data-id="${s.id}">${escapeHtml(s.title)}</button>`).join('') +
+      '</div><div class="dialog-actions"><button type="button" class="dialog-cancel">Cancel</button></div></div>';
+    document.body.appendChild(backdrop);
+    const close = () => backdrop.remove();
+    backdrop.addEventListener('click', close);
+    backdrop.querySelector('.dialog-card').addEventListener('click', (e) => e.stopPropagation());
+    backdrop.querySelector('.dialog-cancel').addEventListener('click', close);
+    backdrop.querySelectorAll('.chooser-opt').forEach((b) => b.addEventListener('click', async () => {
+      close();
+      const toast = showToast('Grouping endings…', 'info', 0);
+      try {
+        const res = await fetch('/stories/bulk-endings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids, parent_id: b.dataset.id }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'failed');
+        const n = data.moved;
+        toast.done(`${n} ${n === 1 ? 'ending' : 'endings'} added to “${data.parent.title}”${data.skipped ? ` · ${data.skipped} skipped` : ''} ✓`, 'info');
+        window.location.href = '/reader/' + data.parent.id;
+      } catch (err) {
+        toast.done('Could not group those stories — please try again', 'error', 3600);
+      }
+    }));
+  });
+}
+
 function initLibraryGallery() {
   // The Library and the Dashboard's "Your library" strip both mix story covers
   // with gallery photos in one grid — bind the same behaviour to whichever exists.

@@ -10,7 +10,8 @@
   // all at once and crash mobile Safari. Only pages that pass it opt in.
   var lazyCover = o.lazyCover && coverIsImage(book);
 %>
-<div class="cover-card" data-href="/reader/<%= book.id %>" data-title="<%= book.title || '' %>" data-date="<%= book.created_at || '' %>" data-fav="<%= faved ? '1' : '0' %>">
+<div class="cover-card" data-href="/reader/<%= book.id %>" data-book-id="<%= book.id %>" data-title="<%= book.title || '' %>" data-date="<%= book.created_at || '' %>" data-fav="<%= faved ? '1' : '0' %>">
+  <span class="tile-check" aria-hidden="true">✓</span>
   <div class="cover-spine <%= coverIsImage(book) ? 'has-image' : '' %> <%= lazyCover ? 'lazy-cover' : '' %>" style="background: <%= lazyCover ? themeGradient(book.theme) : coverBackground(book) %>;">
     <% if (lazyCover) { %>
       <img class="cover-bg" data-full="/media/<%= coverImageId(book) %>" alt="" loading="lazy">
