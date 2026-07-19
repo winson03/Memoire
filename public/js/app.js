@@ -550,6 +550,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Standalone image gallery.
   initGallery();
 
+  // Folder / collection tabs: one scrolling line, with an overflow hint.
+  initTabStrips();
+
   // Library: view-only gallery photos merged into the folder tabs.
   initLibraryGallery();
 
@@ -2023,6 +2026,25 @@ function windowMedia(els, widthFor) {
 // ── Library: view-only gallery photos shown under the folder tabs ───────────
 // The photos live on the dedicated /gallery page for upload/management; here we
 // just render memory-bounded thumbnails/videos and open a lightbox on click.
+// ── Folder / collection tab strips ──────────────────────────────────────────
+// The strip is one scrolling line at every width. Show the "more →" edge fade
+// only when it actually overflows (so a few tabs stay snug, not stretched), and
+// bring the active tab into view when it starts off-screen. Runs on every page
+// that has a strip — library, gallery, favourites.
+function initTabStrips() {
+  // The reader's endings strip behaves the same way; its active tab is .on.
+  document.querySelectorAll('.gallery-tabs .sort-toggle, .ending-tabs').forEach((strip) => {
+    const sync = () => strip.classList.toggle('scrollable', strip.scrollWidth > strip.clientWidth + 4);
+    sync();
+    window.addEventListener('resize', sync);
+    const active = strip.querySelector('a.active, a.on');
+    if (active && strip.scrollWidth > strip.clientWidth + 4) {
+      // Centre it without scrolling the page itself (scrollIntoView would).
+      strip.scrollLeft = Math.max(0, active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2);
+    }
+  });
+}
+
 // Library select mode: tick several story covers, then fold them into one story
 // as its alternate endings. Photos in the mixed grid stay untouchable — only
 // cover cards take a tick.
@@ -2196,16 +2218,6 @@ function initGallery() {
   const activeCollection = grid.dataset.collection || '';
   let collections = [];
   try { collections = JSON.parse(grid.dataset.collections || '[]'); } catch (_) { /* none */ }
-
-  // Show the "swipe for more →" fade on the collection strip only when its
-  // tabs actually overflow (so a few collections stay snug, not stretched).
-  const collStrip = document.querySelector('.gallery-tabs .sort-toggle');
-  if (collStrip) {
-    const syncScrollHint = () =>
-      collStrip.classList.toggle('scrollable', collStrip.scrollWidth > collStrip.clientWidth + 4);
-    syncScrollHint();
-    window.addEventListener('resize', syncScrollHint);
-  }
 
   if (btn && input) btn.addEventListener('click', () => input.click());
 

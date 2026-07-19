@@ -1,0 +1,16 @@
+<% /* Shared pager. Callers pass `page`, `totalPages` and `qs(p)` — a function
+      building the href for a page number. Long runs collapse to an ellipsis
+      (1 2 3 … 32 33 34) rather than listing every page. */ %>
+<nav class="pager">
+  <% if (page > 1) { %><a class="pager-btn" href="<%= qs(page - 1) %>">← Prev</a><% } else { %><span class="pager-btn disabled">← Prev</span><% } %>
+  <% pageNumbers(page, totalPages).forEach(function(p){ %>
+    <% if (p === null) { %>
+      <span class="pager-gap" aria-hidden="true">…</span>
+    <% } else if (p === page) { %>
+      <span class="pager-num active" aria-current="page"><%= p %></span>
+    <% } else { %>
+      <a class="pager-num" href="<%= qs(p) %>"><%= p %></a>
+    <% } %>
+  <% }) %>
+  <% if (page < totalPages) { %><a class="pager-btn" href="<%= qs(page + 1) %>">Next →</a><% } else { %><span class="pager-btn disabled">Next →</span><% } %>
+</nav>

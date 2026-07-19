@@ -21,27 +21,7 @@
             <%
               var qs = function(p){ return '/discover?page=' + p + (query ? ('&q=' + encodeURIComponent(query)) : ''); };
             %>
-            <nav class="pager">
-              <% if (page > 1) { %>
-                <a class="pager-btn" href="<%= qs(page - 1) %>">← Prev</a>
-              <% } else { %>
-                <span class="pager-btn disabled">← Prev</span>
-              <% } %>
-
-              <% for (var p = 1; p <= totalPages; p++) { %>
-                <% if (p === page) { %>
-                  <span class="pager-num active"><%= p %></span>
-                <% } else { %>
-                  <a class="pager-num" href="<%= qs(p) %>"><%= p %></a>
-                <% } %>
-              <% } %>
-
-              <% if (page < totalPages) { %>
-                <a class="pager-btn" href="<%= qs(page + 1) %>">Next →</a>
-              <% } else { %>
-                <span class="pager-btn disabled">Next →</span>
-              <% } %>
-            </nav>
+            <%- include('partials/pager', { page: page, totalPages: totalPages, qs: qs }) %>
             <div class="pager-info">Page <%= page %> of <%= totalPages %></div>
           <% } %>
         <% } else { %>

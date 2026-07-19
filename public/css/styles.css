@@ -285,11 +285,16 @@ a { color: inherit; text-decoration: none; }
    wrapping, so the gallery below never shifts down. */
 .endings-section { margin-top: 38px; padding-top: 26px; border-top: 1px solid rgba(120,80,50,0.14); }
 .endings-section .h3 { margin: 0 0 14px; }
-.ending-tools { display: flex; gap: 16px; margin: -6px 0 16px; font-size: 13px; }
+/* Ending actions on the left, the list/grid switch on the right when it has
+   moved down here (a story whose photos all live in its endings). */
+.ending-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.ending-toolbar .figs-view-row { margin-bottom: 0; margin-left: auto; }
+.ending-tools { display: flex; gap: 16px; margin: -6px 0 0; font-size: 13px; }
 .ending-tools a { color: var(--accent); text-decoration: none; font-weight: 600; }
 .ending-tools a:hover { text-decoration: underline; }
 .ending-tabs { display: flex; gap: 4px; margin-bottom: 18px; padding: 4px; border-radius: 100px; background: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.8); backdrop-filter: blur(8px); overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
 .ending-tabs::-webkit-scrollbar { display: none; }
+.ending-tabs.scrollable { -webkit-mask-image: linear-gradient(to right, #000 92%, transparent); mask-image: linear-gradient(to right, #000 92%, transparent); }
 .ending-tab { padding: 8px 18px; border-radius: 100px; font-size: 13.5px; font-weight: 600; white-space: nowrap; color: rgba(58,50,42,0.6); text-decoration: none; transition: background .2s, color .2s; }
 .ending-tab:hover { background: rgba(194,104,62,0.08); }
 .ending-tab.on { background: linear-gradient(135deg, var(--accent), var(--accent-alt)); color: #FFF8F0; box-shadow: 0 4px 12px rgba(194,104,62,0.25); }
@@ -385,7 +390,21 @@ textarea.input { line-height: 1.5; resize: vertical; }
 /* ── Standalone image gallery ─────────────────────────────────────────────── */
 .gallery-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 22px; flex-wrap: wrap; }
 .gallery-tabs { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-.gallery-tabs .sort-toggle { flex-wrap: wrap; }
+/* Folder / collection tabs stay on ONE line at every width and scroll sideways
+   when there are more than fit — wrapping them into stacked rows pushed the
+   whole page down once a library had many folders. */
+.gallery-tabs .sort-toggle {
+  max-width: 100%; flex-wrap: nowrap; overflow-x: auto; scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.gallery-tabs .sort-toggle::-webkit-scrollbar { display: none; }
+.gallery-tabs .sort-toggle a { white-space: nowrap; }
+/* Right-edge fade hinting "more →", added by JS only when it actually overflows. */
+.gallery-tabs .sort-toggle.scrollable {
+  width: 100%;
+  -webkit-mask-image: linear-gradient(to right, #000 92%, transparent);
+          mask-image: linear-gradient(to right, #000 92%, transparent);
+}
 .gallery-tabs .tab-count { margin-left: 7px; font-size: 11px; font-weight: 600; opacity: 0.65; }
 /* Section headers (Stories / Photos) on the Favourites page. */
 .lib-section-head { display: flex; align-items: baseline; gap: 8px; margin: 26px 0 14px; }
@@ -449,16 +468,9 @@ textarea.input { line-height: 1.5; resize: vertical; }
 /* Small screens: collections become one swipeable row instead of a stack. */
 @media (max-width: 640px) {
   .gallery-tabs { gap: 8px; margin-bottom: 12px; }
-  /* Collections stay in one row and scroll their tabs inside — snug when few,
-     scrollable when many (no wrapping, no page overflow). */
-  .gallery-tabs .sort-toggle {
-    max-width: 100%; flex-wrap: nowrap; overflow-x: auto; scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch; scrollbar-width: none;
-  }
-  .gallery-tabs .sort-toggle::-webkit-scrollbar { display: none; }
-  /* Right-edge fade to hint "more →", added by JS only when it overflows. */
+  /* The one-line scrolling strip is the base behaviour now; phones just get a
+     tighter fade and smaller tabs. */
   .gallery-tabs .sort-toggle.scrollable {
-    width: 100%;
     -webkit-mask-image: linear-gradient(to right, #000 88%, transparent);
             mask-image: linear-gradient(to right, #000 88%, transparent);
   }
@@ -706,6 +718,8 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .pager-btn:hover, .pager-num:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(120,80,50,0.12); }
 .pager-num.active { background: linear-gradient(135deg, var(--accent), var(--accent-alt)); color: #FFF8F0; border: none; box-shadow: 0 8px 18px rgba(194,104,62,0.28); }
 .pager-btn.disabled { opacity: .4; pointer-events: none; }
+/* Skipped run of page numbers — sized like a tab so the row stays even. */
+.pager-gap { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 38px; color: rgba(58,50,42,0.4); font-size: 14px; user-select: none; }
 .pager-info { text-align: center; margin-top: 12px; font-size: 13px; color: rgba(58,50,42,0.45); }
 
 /* ── Lightbox (reader full image) ─────────────────────────────────────────── */

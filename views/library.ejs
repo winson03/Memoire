@@ -94,13 +94,7 @@
           <% if (totalPages > 1) { %>
             <% var base = '/library?' + (activeTab ? ('tab=' + encodeURIComponent(activeTab.name) + '&') : '') + (query ? ('q=' + encodeURIComponent(query) + '&') : ''); %>
             <% var qs = function(p){ return base + 'page=' + p; }; %>
-            <nav class="pager">
-              <% if (page > 1) { %><a class="pager-btn" href="<%= qs(page - 1) %>">← Prev</a><% } else { %><span class="pager-btn disabled">← Prev</span><% } %>
-              <% for (var p = 1; p <= totalPages; p++) { %>
-                <% if (p === page) { %><span class="pager-num active"><%= p %></span><% } else { %><a class="pager-num" href="<%= qs(p) %>"><%= p %></a><% } %>
-              <% } %>
-              <% if (page < totalPages) { %><a class="pager-btn" href="<%= qs(page + 1) %>">Next →</a><% } else { %><span class="pager-btn disabled">Next →</span><% } %>
-            </nav>
+            <%- include('partials/pager', { page: page, totalPages: totalPages, qs: qs }) %>
             <div class="pager-info">Page <%= page %> of <%= totalPages %></div>
           <% } %>
         <% } %>
