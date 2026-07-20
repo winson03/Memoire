@@ -704,10 +704,19 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .chooser { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 4px; max-height: 45vh; overflow-y: auto; }
 .chooser-opt { text-align: left; padding: 11px 14px; border-radius: 10px; border: 1px solid rgba(58,50,42,0.14); background: rgba(255,255,255,0.65); font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; transition: border-color .15s, background .15s; }
 .chooser-opt:hover { border-color: var(--accent); background: rgba(194,104,62,0.08); }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 12px; }
-.dialog-cancel { background: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.9); color: var(--ink); padding: 11px 18px; border-radius: 11px; font-weight: 600; font-size: 14.5px; transition: transform .2s; }
-.dialog-cancel:hover { transform: translateY(-1px); }
-.dialog-confirm { border: none; padding: 11px 20px; border-radius: 11px; font-weight: 700; font-size: 14.5px; color: #FFF8F0; }
+/* Always leave a clear gap above the buttons. A dialog ending in a <select>
+   (the folder import) had none, so they sat flush against it. When the actions
+   follow an element that already carries a bottom margin, top up the
+   difference instead of stacking two full gaps. */
+.dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 14px; margin-top: 26px; }
+.dialog-card p + .dialog-actions,
+.dialog-card .input + .dialog-actions { margin-top: 2px; }
+.dialog-cancel { background: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.9); color: var(--ink); padding: 12px 20px; border-radius: 11px; font-weight: 600; font-size: 14.5px; cursor: pointer; transition: transform .2s, background .2s; }
+.dialog-cancel:hover { transform: translateY(-1px); background: rgba(255,255,255,0.9); }
+.dialog-confirm { border: none; padding: 12px 22px; border-radius: 11px; font-weight: 700; font-size: 14.5px; color: #FFF8F0; cursor: pointer; transition: transform .2s, box-shadow .2s, opacity .2s; }
+.dialog-confirm:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(194,104,62,0.28); }
+/* Import stays disabled until a folder is added — it must not look clickable. */
+.dialog-confirm:disabled { opacity: .42; cursor: not-allowed; box-shadow: none; transform: none; }
 .dialog-confirm.accent { background: linear-gradient(135deg, var(--accent), var(--accent-alt)); }
 .dialog-confirm.danger { background: linear-gradient(135deg,#C8564A,#9A332A); }
 

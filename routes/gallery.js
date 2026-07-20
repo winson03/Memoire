@@ -50,8 +50,21 @@ router.get('/', (req, res) => {
   // "Favourites first" is a stable re-sort of the newest-ordered list: favourited
   // images float to the top, keeping their date order within each group.
   if (order === 'fav') images = images.slice().sort((a, b) => (b.is_favourite ? 1 : 0) - (a.is_favourite ? 1 : 0));
+
+  // Paginate normal browsing. Assign mode is deliberately NOT paginated: its
+  // Save posts the ticked ids and drops every collection member that wasn't
+  // posted, so a page holding only some of them would silently empty the rest.
+  const perPage = 20;
+  const total = images.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+  const pageImages = assignMode ? images : images.slice((page - 1) * perPage, page * perPage);
+
   res.render('gallery', {
-    images,
+    images: pageImages,
+    page,
+    totalPages,
+    total,
     order,
     collections: Collections.listForUser(req.user.id),
     activeCollection,

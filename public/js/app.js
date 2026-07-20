@@ -1063,10 +1063,10 @@ function initFolderImport() {
       <div class="dialog-card" role="dialog" aria-modal="true">
         <h3>Import folders</h3>
         <p>Add each folder you want to import — every folder becomes its own private story, named after the folder, with its first photo as the cover.</p>
-        <div id="importDropTarget" style="border:2px dashed rgba(140,100,60,.45);border-radius:12px;padding:20px 16px;margin:12px 0;text-align:center;font-size:13px;opacity:.85;cursor:pointer;">
+        <div id="importDropTarget" style="border:2px dashed rgba(140,100,60,.45);border-radius:12px;padding:22px 16px;margin:0 0 4px;text-align:center;font-size:13px;opacity:.85;cursor:pointer;">
           Drop folders here, or <span style="text-decoration:underline;">click to add a folder</span>
         </div>
-        <div id="importList" style="max-height:230px;overflow:auto;margin:10px 0;"></div>
+        <div id="importList" style="max-height:230px;overflow:auto;margin:10px 0 20px;"></div>
         <div id="importNestRow" hidden style="margin:4px 0 14px;">
           <label class="field-label" style="font-size:12px;">Folders inside a folder become</label>
           <div class="sort-toggle" id="importNestMode" style="width:100%;">
@@ -1074,7 +1074,7 @@ function initFolderImport() {
             <a href="#" data-mode="stories">Separate stories</a>
           </div>
         </div>
-        <label class="field-label" style="font-size:12px;">Add the new stories to</label>
+        <label class="field-label" for="importIntoFolder" style="font-size:12px;">Add the new stories to</label>
         <select class="pseudo-select" id="importIntoFolder" style="width:100%;cursor:pointer;">${folderOptions}</select>
         <div class="dialog-actions">
           <button type="button" class="dialog-cancel">Cancel</button>
@@ -2177,7 +2177,13 @@ function initFavouritesGallery() {
   const grid = document.getElementById('favouritesCombined');
   if (!grid) return;
   const emptyEl = document.getElementById('favEmpty');
-  const showEmptyIfBare = () => { if (emptyEl && !grid.querySelector('.gallery-tile, .cover-card')) emptyEl.hidden = false; };
+  const showEmptyIfBare = () => {
+    if (grid.querySelector('.gallery-tile, .cover-card')) return;
+    // Emptying a page isn't emptying the list when more pages follow — reload
+    // so the next page's favourites move up rather than claiming there are none.
+    if (document.querySelector('.pager')) { window.location.reload(); return; }
+    if (emptyEl) emptyEl.hidden = false;
+  };
   windowMedia(Array.from(grid.querySelectorAll('img[data-full], video[data-full]')), () => 640);
   grid.addEventListener('click', async (e) => {
     // A photo's heart un-favourites and drops its tile from the page.
@@ -2409,6 +2415,12 @@ function initGallery() {
             body: JSON.stringify({ ids }),
           });
           selectedTiles().forEach((t) => t.remove());
+          // With more pages behind this one, emptying the page doesn't mean the
+          // gallery is empty — reload so the following page's media move up.
+          if (!grid.querySelector('.gallery-tile') && document.querySelector('.pager')) {
+            window.location.reload();
+            return;
+          }
           if (empty && !grid.querySelector('.gallery-tile')) empty.hidden = false;
           exitSelect();
         } finally {

@@ -104,6 +104,19 @@
           <% }) %>
         </div>
 
+        <% /* Assign mode shows everything at once (its Save posts the whole
+              selection), so it never paginates. */ %>
+        <% if (!assignMode && totalPages > 1) { %>
+          <%
+            var gBase = '/gallery?order=' + order
+              + (activeCollection ? ('&collection=' + activeCollection.id) : '')
+              + (favMode ? '&favourites=1' : '') + '&page=';
+            var qs = function(p){ return gBase + p; };
+          %>
+          <%- include('partials/pager', { page: page, totalPages: totalPages, qs: qs }) %>
+          <div class="pager-info">Page <%= page %> of <%= totalPages %> · <%= total %> <%= total === 1 ? 'item' : 'items' %></div>
+        <% } %>
+
         <div class="empty" id="galleryEmpty" <%= images.length ? 'hidden' : '' %>>
           <div class="ico"><%= favMode ? '♡' : '▦' %></div>
           <div class="et"><%= favMode ? 'No favourites yet' : (activeCollection ? ('Nothing in “' + activeCollection.name + '” yet') : 'No media yet') %></div>

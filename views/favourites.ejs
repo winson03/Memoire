@@ -57,6 +57,17 @@
             <div class="et">No favourites yet</div>
             <div class="eh">Tap the heart on any story or gallery image to keep it here.</div>
           </div>
+
+          <% if (totalPages > 1) { %>
+            <%
+              var favBase = '/favourites?'
+                + (activeTab ? ('tab=' + encodeURIComponent(activeTab.name) + '&') : '')
+                + (query ? ('q=' + encodeURIComponent(query) + '&') : '');
+              var qs = function(p){ return favBase + 'page=' + p; };
+            %>
+            <%- include('partials/pager', { page: page, totalPages: totalPages, qs: qs }) %>
+            <div class="pager-info">Page <%= page %> of <%= totalPages %></div>
+          <% } %>
         <% } %>
 
       </div>

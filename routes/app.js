@@ -308,8 +308,16 @@ router.get('/favourites', (req, res) => {
     ...favImages.map((i) => ({ type: 'photo', img: i, date: i.created_at || '' })),
   ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
+  // Paginated like the library — same mixed grid, same page size.
+  const perPage = 24;
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+
   res.render('favourites', {
-    items,
+    items: items.slice((page - 1) * perPage, page * perPage),
+    page,
+    totalPages,
     tabs,
     activeTab: active ? { name: active.name } : null,
     allActive: !active,
