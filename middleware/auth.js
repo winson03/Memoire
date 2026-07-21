@@ -1,6 +1,7 @@
 'use strict';
 
 const { Favourites, Notifications } = require('../lib/queries');
+const Settings = require('../lib/settings');
 
 // Gate the app shell — unauthenticated visitors are sent to the login screen.
 function ensureAuth(req, res, next) {
@@ -21,6 +22,10 @@ function locals(req, res, next) {
   res.locals.favIds = req.user ? Favourites.idsForUser(req.user.id) : [];
   res.locals.query = req.query.q || '';
   res.locals.path = req.path;
+  // Fast preview trades bandwidth and memory for instant previews. Admins turn
+  // it on for themselves from /settings — never applies to storytellers, whose
+  // phones are the reason the media windowing exists in the first place.
+  res.locals.fastPreview = !!(req.user && req.user.role === 'admin' && Settings.getBool('fast_preview'));
   if (req.user) {
     Notifications.ensureBirthday(req.user);
     res.locals.notifications = Notifications.listForUser(req.user.id, 15);

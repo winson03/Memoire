@@ -9,6 +9,7 @@ const { greeting, firstName, storageStats } = require('../lib/view-helpers');
 const { statusLabel, readersTxt } = require('../lib/themes');
 const storage = require('../lib/storage');
 const drive = require('../lib/drive');
+const Settings = require('../lib/settings');
 const bcrypt = require('bcryptjs');
 
 const avatarUpload = multer({
@@ -690,7 +691,19 @@ router.get('/settings', async (req, res) => {
     storage: storageStats(),
     driveStatus,
     driveMinMb: Number(process.env.GDRIVE_VIDEO_MIN_MB || 15),
+    fastPreviewOn: Settings.getBool('fast_preview'),
   });
+});
+
+// Settings: fast preview on/off. Admin-only, and it only changes what admins
+// see — storytellers keep the bandwidth-light default (see middleware/auth.js).
+router.post('/settings/fast-preview', ensureAdmin, (req, res) => {
+  const on = req.body.on === '1';
+  Settings.setBool('fast_preview', on);
+  req.flash('info', on
+    ? 'Fast preview on — photos load ahead and open instantly for admins.'
+    : 'Fast preview off — photos load as you scroll.');
+  res.redirect('/settings');
 });
 
 // ── Settings: connect Google Drive (admin) ────────────────────────────────────

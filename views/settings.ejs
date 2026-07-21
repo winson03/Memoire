@@ -64,6 +64,26 @@
             </form>
           <% } %>
         </section>
+
+        <section class="settings-section">
+          <div class="flex-between" style="align-items:flex-start;gap:16px;flex-wrap:wrap;">
+            <div>
+              <h3 style="margin-bottom:6px;">Fast preview</h3>
+              <p style="margin:0;color:rgba(58,50,42,0.5);font-size:14px;line-height:1.5;max-width:560px;">
+                Loads photos well ahead of the scroll and opens them full-size the moment you click, with no
+                spinner. Costs more bandwidth, so it stays off for storytellers — this only changes what
+                <strong style="font-weight:600;">admins</strong> see.
+              </p>
+            </div>
+            <span class="connected-chip <%= fastPreviewOn ? '' : 'off' %>"><span class="live"></span><%= fastPreviewOn ? 'On' : 'Off' %></span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+            <form action="/settings/fast-preview" method="post" style="margin:0;">
+              <input type="hidden" name="on" value="<%= fastPreviewOn ? '0' : '1' %>">
+              <button type="submit" class="btn btn-soft" style="padding:10px 16px;border-radius:10px;font-size:13.5px;"><%= fastPreviewOn ? 'Turn off' : 'Turn on' %></button>
+            </form>
+          </div>
+        </section>
         <% } %>
 
         <section class="danger-section">

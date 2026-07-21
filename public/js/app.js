@@ -162,6 +162,19 @@ document.addEventListener('submit', (e) => { if (!e.defaultPrevented) showPageLo
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function escapeAttr(s) { return escapeHtml(s); }
 
+// ── Fast preview (admin-only switch on /settings) ────────────────────────────
+// Off (the default, and everything a storyteller ever sees): tiles load as they
+// near the viewport and the lightbox fetches the full-res original on click.
+// On: the load-ahead window widens, small grids skip windowing altogether, the
+// lightbox paints the tile's thumbnail on the click frame while the original
+// downloads behind it, and neighbouring originals are prefetched so arrowing
+// through a gallery never stalls.
+const FAST_PREVIEW = document.body.dataset.fastPreview === '1';
+// Even with fast preview on, a big set keeps its window: Safari holds every
+// decoded bitmap, so mounting 500 photos at once crashes the tab (see the note
+// on windowImages below). Below this many tiles the memory cost is safe.
+const FAST_MOUNT_ALL_MAX = 150;
+
 // ── Lightbox (full-size image viewer) ────────────────────────────────────────
 // Full-screen image viewer. `items` is an array of { src, caption }; the
 // viewer opens at `index` and can slide between images (buttons, arrow keys,
@@ -187,14 +200,37 @@ function openLightbox(items, index, onClose) {
   const capEl = bd.querySelector('.lightbox-cap');
   const countEl = bd.querySelector('.lightbox-count');
 
+  // Fast preview: warm the originals on either side so arrowing through the
+  // gallery doesn't wait on a download it could have started already.
+  function prefetchNeighbours() {
+    if (!FAST_PREVIEW || !multi) return;
+    [-2, -1, 1, 2].forEach((d) => {
+      const it = items[(i + d + items.length) % items.length];
+      if (it && it.kind !== 'video') new Image().src = it.src;
+    });
+  }
+
   function render() {
     const it = items[i];
-    mediaEl.innerHTML = it.kind === 'video'
-      ? `<video src="${it.src}" controls autoplay></video>`
-      : `<img src="${it.src}" alt="">`;
+    if (it.kind === 'video') {
+      mediaEl.innerHTML = `<video src="${it.src}" controls autoplay></video>`;
+    } else if (FAST_PREVIEW && it.thumb && it.thumb !== it.src) {
+      // The grid thumbnail is already decoded in this tab, so it paints on the
+      // click frame — no spinner, no empty viewer. Swap in the full-res
+      // original once it lands (same element, so there's no flash of nothing).
+      mediaEl.innerHTML = `<img src="${it.thumb}" alt="">`;
+      const shown = mediaEl.querySelector('img');
+      const full = new Image();
+      // Ignore a load that arrives after the viewer moved on to another image.
+      full.onload = () => { if (shown.isConnected) shown.src = it.src; };
+      full.src = it.src;
+    } else {
+      mediaEl.innerHTML = `<img src="${it.src}" alt="">`;
+    }
     capEl.textContent = it.caption || '';
     capEl.style.display = it.caption ? '' : 'none';
     if (multi) countEl.textContent = `${i + 1} / ${items.length}`;
+    prefetchNeighbours();
   }
   function go(d) { i = (i + d + items.length) % items.length; render(); }
   function close() {
@@ -666,16 +702,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // the story's images.
   const figImgs = Array.from(document.querySelectorAll('.reader-figs .photo-frame img, .story-body img'));
   if (figImgs.length) {
-    const gallery = figImgs.map((img) => {
+    // Built per click, not once up front: windowing mounts and unmounts tiles as
+    // you scroll, so `thumb` is only accurate at the moment you open the viewer.
+    const galleryNow = () => figImgs.map((img) => {
       const fig = img.closest('figure');
       const fc = fig && fig.querySelector('figcaption');
       // Tiles load a downscaled ?w= preview; the lightbox opens the full-res
       // original (data-full) so only the one on screen is decoded at full size.
-      return { src: img.dataset.full || img.getAttribute('src'), caption: ((fc && fc.textContent) || '').trim() };
+      // `thumb` is whatever this tile has loaded right now — fast preview paints
+      // it instantly while the original downloads (empty for unmounted tiles).
+      return {
+        src: img.dataset.full || img.getAttribute('src'),
+        thumb: img.currentSrc || img.getAttribute('src') || '',
+        caption: ((fc && fc.textContent) || '').trim(),
+      };
     });
     figImgs.forEach((img, idx) => {
       img.style.cursor = 'zoom-in';
-      img.addEventListener('click', () => openLightbox(gallery, idx, (end) => {
+      img.addEventListener('click', () => openLightbox(galleryNow(), idx, (end) => {
         if (figImgs[end]) figImgs[end].scrollIntoView({ block: 'center' });
       }));
     });
@@ -1970,11 +2014,17 @@ function windowImages(imgs, widthFor, refresh) {
   const mount = (img) => { const s = srcFor(img); if (img.getAttribute('src') !== s) img.src = s; };
   const unmount = (img) => { if (img.getAttribute('src')) img.removeAttribute('src'); };
 
-  if (!('IntersectionObserver' in window)) { imgs.forEach(mount); return; } // old browser: load all
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) { if (e.isIntersecting) mount(e.target); else unmount(e.target); }
-  }, { rootMargin: '400px 0px', threshold: 0 });
-  imgs.forEach((img) => io.observe(img));
+  // Old browser, or fast preview on a set small enough to hold entirely: load
+  // every image up front and never unmount, so nothing ever waits on a scroll.
+  const mountAll = !('IntersectionObserver' in window) || (FAST_PREVIEW && imgs.length <= FAST_MOUNT_ALL_MAX);
+  if (mountAll) {
+    imgs.forEach(mount);
+  } else {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) { if (e.isIntersecting) mount(e.target); else unmount(e.target); }
+    }, { rootMargin: FAST_PREVIEW ? '2000px 0px' : '400px 0px', threshold: 0 });
+    imgs.forEach((img) => io.observe(img));
+  }
 
   if (refresh) refresh.addEventListener('reader:viewchange', () => {
     imgs.forEach((img) => { if (img.getAttribute('src')) mount(img); }); // reload visible at new size
@@ -2016,9 +2066,21 @@ function windowMedia(els, widthFor) {
     if (el.tagName === 'VIDEO') el.load(); // free the decoded frame / media resource
   };
   if (!('IntersectionObserver' in window)) { els.forEach(mount); return null; }
+
+  // Fast preview on a small enough grid: mount every image up front and never
+  // unmount it, so scrolling back never re-fetches. Videos stay windowed either
+  // way — iOS caps how many <video> elements can hold a decoded frame at once,
+  // and that cap is what the tab crash comes from.
+  const pinImages = FAST_PREVIEW && els.length <= FAST_MOUNT_ALL_MAX;
+  const isPinned = (el) => pinImages && el.tagName !== 'VIDEO';
+  if (pinImages) els.forEach((el) => { if (isPinned(el)) mount(el); });
+
   const io = new IntersectionObserver((entries) => {
-    for (const e of entries) { if (e.isIntersecting) mount(e.target); else unmount(e.target); }
-  }, { rootMargin: '600px 0px', threshold: 0 });
+    for (const e of entries) {
+      if (e.isIntersecting) mount(e.target);
+      else if (!isPinned(e.target)) unmount(e.target);
+    }
+  }, { rootMargin: FAST_PREVIEW ? '2000px 0px' : '600px 0px', threshold: 0 });
   els.forEach((el) => io.observe(el));
   return io;
 }
@@ -2163,7 +2225,7 @@ function bindPhotoGrid(grid) {
     if (!clicked) return;
     const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
     openLightbox(
-      items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
+      items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, thumb: x.currentSrc || x.getAttribute('src') || '', caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
       items.indexOf(clicked),
       (end) => { if (items[end]) items[end].scrollIntoView({ block: 'center' }); }
     );
@@ -2203,7 +2265,7 @@ function initFavouritesGallery() {
     if (clicked) {
       const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
       openLightbox(
-        items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
+        items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, thumb: x.currentSrc || x.getAttribute('src') || '', caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
         items.indexOf(clicked),
         (end) => { if (items[end]) items[end].scrollIntoView({ block: 'center' }); }
       );
@@ -2464,7 +2526,7 @@ function initGallery() {
     if (clicked) {
       const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
       openLightbox(
-        items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
+        items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, thumb: x.currentSrc || x.getAttribute('src') || '', caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
         items.indexOf(clicked),
         (end) => { if (items[end]) items[end].scrollIntoView({ block: 'center' }); }
       );
