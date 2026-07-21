@@ -49,8 +49,7 @@
                 <form action="/admin/stories/<%= r.id %>/status" method="post" style="margin:0;">
                   <select name="status" class="status-select" onchange="this.form.submit()" aria-label="Story visibility">
                     <option value="published" <%= r.status === 'published' ? 'selected' : '' %>>Published</option>
-                    <option value="private" <%= r.status === 'private' ? 'selected' : '' %>>Private</option>
-                    <option value="draft" <%= r.status === 'draft' ? 'selected' : '' %>>Draft</option>
+                    <option value="private" <%= r.status !== 'published' ? 'selected' : '' %>>Private</option>
                   </select>
                 </form>
               </span>

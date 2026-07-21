@@ -17,7 +17,7 @@
                       data-body="“<%= book.title %>” and all its media will be permanently removed. This can’t be undone."
                       data-action="/stories/<%= book.id %>/delete">Delete this story</button>
             <% } %>
-            <% var saveLabels = { published: 'Publish story', private: 'Save privately', draft: 'Save as draft' }; %>
+            <% var saveLabels = { published: 'Publish story', private: 'Save privately' }; %>
             <button type="submit" class="btn btn-accent" id="saveBtn"><%= saveLabels[book.status] || 'Save story' %></button>
           </div>
         </div>
@@ -124,16 +124,36 @@
                 </label>
               <% } else { %>
                 <% if (myEndings.length) { %>
-                  <div class="media-hint">This story keeps its own photos. These endings sit below them in the reader, and readers switch between them with tabs.</div>
-                  <div class="ending-picks">
+                  <div class="media-hint">This story keeps its own photos. These endings sit below them in the reader, and readers switch between them with tabs. Rename one and rearrange its photos right here — it all saves with the story.</div>
+                  <%
+                    /* Each ending edits in place. They open shut so a story with
+                       a dozen of them doesn't fetch a thousand thumbnails at
+                       once; the tiles inside are lazy for the same reason. */
+                  %>
+                  <div class="ending-cards">
                     <% myEndings.forEach(function(e, i){ %>
-                      <div class="ending-pick is-ending">
-                        <span class="ending-pick-thumb" style="background: <%= coverBackground(e) %>;"></span>
-                        <span class="ending-pick-body">
-                          <span class="ending-pick-title"><%= (e.ending_label || '').trim() || ('Ending ' + (i + 1)) %></span>
-                          <span class="ending-pick-meta"><%= e.title %></span>
-                        </span>
-                        <a class="ending-pick-edit" href="/editor?id=<%= e.id %>">Edit</a>
+                      <% var eLabel = (e.ending_label || '').trim() || ('Ending ' + (i + 1)); %>
+                      <div class="ending-card" id="ending<%= e.id %>" data-ending-card>
+                        <input type="hidden" name="ending_ids" value="<%= e.id %>">
+                        <button type="button" class="ending-card-head" data-ending-toggle aria-expanded="false">
+                          <span class="chev" aria-hidden="true">▾</span>
+                          <span class="ending-pick-thumb" style="background: <%= coverBackground(e) %>;"></span>
+                          <span class="ending-pick-body">
+                            <span class="ending-pick-title" data-ending-title><%= eLabel %></span>
+                            <span class="ending-pick-meta"><%= e.photos.length %> <%= e.photos.length === 1 ? 'item' : 'items' %> · <%= e.title %></span>
+                          </span>
+                        </button>
+                        <div class="ending-card-body" hidden>
+                          <label class="field-label" for="endingLabel<%= e.id %>" style="font-size:12px;">Name of this ending</label>
+                          <input id="endingLabel<%= e.id %>" class="input" name="ending_label_<%= e.id %>"
+                                 value="<%= e.ending_label || '' %>" placeholder="e.g. Dead body" maxlength="60"
+                                 data-ending-label>
+                          <%- include('partials/media-editor', {
+                            mediaBook: e, media: e.photos, heading: 'Photos & films', lazy: true,
+                            hint: 'Drop a folder here to add to this ending. Pick a number on each tile to set its order.',
+                          }) %>
+                          <a class="ending-card-open" href="/editor?id=<%= e.id %>">Open this ending on its own page →</a>
+                        </div>
                       </div>
                     <% }) %>
                   </div>
@@ -198,35 +218,10 @@
 
             <% if (!isNovel) { %>
             <div class="glass panel">
-              <div class="media-head">
-                <div class="t">Photos &amp; films <span id="uploadProgress" class="upload-progress" hidden></span></div>
-                <div style="display:flex;gap:8px;">
-                  <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="addFolderBtn">+ Add folder</button>
-                  <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="addMediaBtn">+ Add media</button>
-                </div>
-              </div>
-              <div class="media-hint">Drag a folder of images here to upload them all (no browser prompt) — they’re sorted by file name and the folder names an untitled story. Pick a number on each tile to set its order. Photos, films and PDFs are stored securely.</div>
-              <input type="file" id="mediaInput" multiple accept="image/*,video/*,application/pdf" hidden>
-              <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
-              <div class="media-grid" id="mediaGrid" data-book="<%= book.id %>">
-                <% photos.forEach(function(m, i){ %>
-                  <div class="media-tile" data-media-id="<%= m.id %>">
-                    <div class="media-thumb">
-                      <select class="media-order" aria-label="Position"><option><%= i + 1 %></option></select>
-                      <button type="button" class="media-remove" data-remove="<%= m.id %>" title="Remove">×</button>
-                      <% if (m.telegram_file_id && m.kind === 'photo') { %>
-                        <img src="/media/<%= m.id %>?w=640" alt="" draggable="false">
-                      <% } else if (m.telegram_file_id && m.kind === 'video') { %>
-                        <video src="/media/<%= m.id %>#t=0.1" muted preload="metadata"></video>
-                      <% } else { %>
-                        <span class="media-kind"><%= (m.kind || 'file').toUpperCase() %></span>
-                      <% } %>
-                    </div>
-                    <div class="media-name"><%= m.label || m.file_name || 'Untitled' %></div>
-                  </div>
-                <% }) %>
-                <button type="button" class="add-media-tile" id="addMediaTile">+ Add media</button>
-              </div>
+              <%- include('partials/media-editor', {
+                mediaBook: book, media: photos, heading: 'Photos & films', primary: true, gridId: 'mediaGrid',
+                hint: 'Drag a folder of images here to upload them all (no browser prompt) — they’re sorted by file name and the folder names an untitled story. Pick a number on each tile to set its order. Photos, films and PDFs are stored securely.',
+              }) %>
             </div>
             <% } %>
           </div>

@@ -21,10 +21,12 @@ const upload = multer({
   }),
 });
 
+// Private is the default and the resting state: a new story is private until
+// you choose to publish it. (There used to be a third "Draft" — it only ever
+// caught stories you'd closed without saving, which is what private means.)
 const STATUS_DEFS = [
   { key: 'published', label: 'Published', desc: 'Visible to everyone' },
   { key: 'private', label: 'Private', desc: 'Only you can see it' },
-  { key: 'draft', label: 'Draft', desc: 'Not published yet' },
 ];
 
 function ownerOnly(book, req) {
@@ -45,14 +47,16 @@ router.get('/reader/:id', (req, res) => {
   if (book.status === 'published' && !ownerOnly(book, req)) Books.incrementViews(book.id);
 
   // The story's own photos always show. Its endings live in their own tabbed
-  // section below, showing one ending's photos at a time.
+  // section below. Every ending's gallery is rendered up front so switching
+  // tabs is a class flip in the browser rather than a page load that would
+  // throw the reader back to the top of the story — off-screen photos cost
+  // nothing until they scroll into view (see windowImages in app.js).
   const photos = Media.listForBook(book.id);
-  const endingTabs = Books.endingTabs(book);
+  const endingTabs = Books.endingTabs(book).map((t) => ({ ...t, photos: Media.listForBook(t.id) }));
   const wanted = parseInt(req.query.ending, 10);
   const openEnding = endingTabs.find((t) => t.id === wanted) || endingTabs[0] || null;
-  const endingPhotos = openEnding ? Media.listForBook(openEnding.id) : [];
   // Only show other books by this author that are public (published) — or the
-  // viewer's own — so private/draft stories never leak.
+  // viewer's own — so private stories never leak.
   const moreCandidates = Books.listByAuthor(book.author)
     .filter((b) => b.id !== book.id && (b.status === 'published' || b.user_id === req.user.id));
   // Shuffle before taking three — listByAuthor is ordered by id, so a plain
@@ -67,7 +71,7 @@ router.get('/reader/:id', (req, res) => {
 
   res.render('reader', {
     openBook: book, photos, moreByAuthor, faved, isOwner: ownerOnly(book, req),
-    blocks: parseBlocks(book.content), endingTabs, endingPhotos,
+    blocks: parseBlocks(book.content), endingTabs,
     openEndingId: openEnding ? openEnding.id : null,
   });
 });
@@ -145,7 +149,7 @@ router.get('/editor', (req, res) => {
     if (!book) return res.redirect('/dashboard');
     if (!ownerOnly(book, req)) return res.redirect('/reader/' + book.id);
   } else {
-    // "New story" / "New novel" — create a blank draft, then edit it.
+    // "New story" / "New novel" — create a blank private story, then edit it.
     const type = req.query.type === 'novel' ? 'novel' : 'story';
     const folderId = req.query.folder ? parseInt(req.query.folder, 10) : null;
     const folder = folderId ? Folders.findById(folderId) : null;
@@ -156,7 +160,7 @@ router.get('/editor', (req, res) => {
       series: folder ? folder.name : null,
       collection: null,
       folder_id: folder && folder.user_id === u.id ? folder.id : null,
-      status: 'draft',
+      status: 'private',
       theme: 'terra',
       year: new Date().getFullYear(),
       blurb: '',
@@ -169,7 +173,9 @@ router.get('/editor', (req, res) => {
   const folders = Folders.listForUser(u.id);
   // The user's other story titles — the editor confirms before saving a duplicate.
   const otherTitles = Books.listByUser(u.id).filter((b) => b.id !== book.id).map((b) => b.title);
-  const myEndings = Books.listEndings(book.id);
+  // Endings are editable in place, right here — name and photos alike — so
+  // there's no round trip through a second editor to touch one.
+  const myEndings = Books.listEndings(book.id).map((e) => ({ ...e, photos: Media.listForBook(e.id) }));
   const parentBook = book.parent_book_id ? Books.findById(book.parent_book_id) : null;
   // Stories that can be merged in as endings of this one. Scoped to this
   // story's folder — endings are versions of the same story, and those live
@@ -279,8 +285,8 @@ router.post('/stories/:id', (req, res) => {
   const book = Books.findById(parseInt(req.params.id, 10));
   if (!ownerOnly(book, req)) return res.status(403).send('Forbidden');
 
-  // Saving honours the selected Visibility (Published / Private / Draft).
-  const status = ['published', 'private', 'draft'].includes(req.body.status) ? req.body.status : book.status;
+  // Saving honours the selected Visibility (Published / Private).
+  const status = ['published', 'private'].includes(req.body.status) ? req.body.status : book.status;
 
   const folderId = req.body.folder_id ? parseInt(req.body.folder_id, 10) : null;
   const folder = folderId ? Folders.findById(folderId) : null;
@@ -313,6 +319,18 @@ router.post('/stories/:id', (req, res) => {
     if (req.body.ending_label !== undefined) Books.setEndingLabel(book.id, req.body.ending_label);
   }
 
+  // Names typed into the editor's inline ending cards. Each card posts its id
+  // alongside an `ending_label_<id>` field, so they save with the story.
+  [].concat(req.body.ending_ids || [])
+    .map((n) => parseInt(n, 10))
+    .filter(Boolean)
+    .forEach((id) => {
+      const ending = Books.findById(id);
+      if (!ending || ending.parent_book_id !== book.id || ending.user_id !== req.user.id) return;
+      const label = req.body['ending_label_' + id];
+      if (label !== undefined) Books.setEndingLabel(id, label);
+    });
+
   // Stories ticked in the editor's endings picker fold into this one.
   const mergeIds = [].concat(req.body.merge_ids || [])
     .map((n) => parseInt(n, 10))
@@ -336,7 +354,7 @@ router.post('/stories/:id', (req, res) => {
 
   req.flash('info', merged
     ? `${merged} ${merged === 1 ? 'ending' : 'endings'} merged into “${book.title}”.`
-    : ({ published: 'Story published.', private: 'Saved privately.', draft: 'Draft saved.' }[status] || 'Story saved.'));
+    : ({ published: 'Story published.', private: 'Saved privately.' }[status] || 'Story saved.'));
   if (merged) return res.redirect('/reader/' + book.id);
   // A story filed in a folder returns to that folder (you came from there, and
   // history-based "back" is unreliable across the create→edit redirect chain);
@@ -616,6 +634,24 @@ router.post('/stories/:id/media/:mediaId/delete', (req, res) => {
     Media.remove(media.id);
   }
   res.json({ ok: true });
+});
+
+// ── Media: bulk delete ────────────────────────────────────────────────────────
+// Powers the editor's select mode — clearing out a bad batch one ✕ at a time is
+// no way to spend an afternoon.
+router.post('/stories/:id/media/bulk-delete', (req, res) => {
+  const book = Books.findById(parseInt(req.params.id, 10));
+  if (!ownerOnly(book, req)) return res.status(403).json({ error: 'forbidden' });
+  const ids = Array.isArray(req.body.ids) ? req.body.ids.map((n) => parseInt(n, 10)).filter(Boolean) : [];
+  let removed = 0;
+  ids.forEach((mediaId) => {
+    const media = Media.findById(mediaId);
+    if (!media || media.book_id !== book.id) return;
+    storage.remove(media.telegram_file_id);
+    Media.remove(media.id);
+    removed += 1;
+  });
+  res.json({ ok: true, removed });
 });
 
 // ── Media: reorder ────────────────────────────────────────────────────────────

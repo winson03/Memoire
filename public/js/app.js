@@ -522,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Visibility cards (editor) — selection drives the save button's label/action.
   const saveBtn = document.getElementById('saveBtn');
-  const SAVE_LABELS = { published: 'Publish story', private: 'Save privately', draft: 'Save as draft' };
+  const SAVE_LABELS = { published: 'Publish story', private: 'Save privately' };
   document.querySelectorAll('[data-visibility]').forEach((card) => {
     card.addEventListener('click', () => {
       document.querySelectorAll('[data-visibility]').forEach((c) => c.classList.remove('selected'));
@@ -580,8 +580,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Cover source control (upload / colour theme / first photo).
   initCover();
 
-  // Media management (editor).
+  // Media management (editor) — the story's own grid plus one per ending.
   initMedia();
+
+  // Editor: alternate endings edited in place, without leaving the page.
+  initEndingCards();
 
   // Standalone image gallery.
   initGallery();
@@ -600,6 +603,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Reader: grid/list layout toggle for a photo story's images.
   initReaderFigs();
+
+  // Reader: fold sections away (remembered per story).
+  initReaderSections();
+
+  // Reader: swap between alternate endings without reloading the page.
+  initEndingTabs();
 
   // Reader: keep only the photos near the viewport loaded (memory-bounded).
   initReaderFigWindow();
@@ -1575,20 +1584,30 @@ function formatDuration(secs) {
   return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
-// ── Editor media: upload / remove / reorder ─────────────────────────────────
+// ── Editor media: upload / remove / reorder / bulk select ───────────────────
+// One editor page can hold several of these grids — the story's own photos and
+// one per alternate ending edited inline below them — so every control is
+// looked up inside its own section rather than by a page-wide id.
 function initMedia() {
-  const grid = document.getElementById('mediaGrid');
+  document.querySelectorAll('[data-media-section]').forEach(initMediaSection);
+}
+
+function initMediaSection(section) {
+  const grid = section.querySelector('.media-grid');
   if (!grid) return;
   const bookId = grid.dataset.book;
-  const input = document.getElementById('mediaInput');
-  const addBtn = document.getElementById('addMediaBtn');
-  const addTile = document.getElementById('addMediaTile');
+  const input = section.querySelector('[data-media-input]');
+  const addBtn = section.querySelector('[data-add-media]');
+  const addTile = section.querySelector('[data-add-tile]');
+  // Only the story's own grid renames an untitled story after a dropped folder;
+  // an ending's grid leaves the story's title alone.
+  const isPrimary = section.dataset.primary === '1';
 
   function trigger() { input.click(); }
   if (addBtn) addBtn.addEventListener('click', trigger);
   if (addTile) addTile.addEventListener('click', trigger);
 
-  const progress = document.getElementById('uploadProgress');
+  const progress = section.querySelector('[data-upload-progress]');
   function showProgress(done, total, eta) {
     if (!progress) return;
     if (total <= 0) { progress.hidden = true; progress.textContent = ''; return; }
@@ -1616,7 +1635,7 @@ function initMedia() {
       const worker = async () => {
         for (let file = queue.shift(); file; file = queue.shift()) {
           showProgress(Math.min(done + 1, total), total, eta);
-          const good = await uploadFile(file, folderName ? { setTitle: folderName } : {}, (sent) => eta.progress(file, sent));
+          const good = await uploadFile(file, (folderName && isPrimary) ? { setTitle: folderName } : {}, (sent) => eta.progress(file, sent));
           if (good === false) failed += 1;
           eta.fileDone(file);
           done += 1;
@@ -1647,8 +1666,8 @@ function initMedia() {
 
   // Folder upload via the picker — pulls out images, sorts by name, titles an
   // untitled story after the folder.
-  const folderBtn = document.getElementById('addFolderBtn');
-  const folderInput = document.getElementById('folderInput');
+  const folderBtn = section.querySelector('[data-add-folder]');
+  const folderInput = section.querySelector('[data-folder-input]');
   if (folderBtn && folderInput) folderBtn.addEventListener('click', () => pickFolder());
   if (folderInput) {
     folderInput.addEventListener('change', async () => {
@@ -1686,7 +1705,7 @@ function initMedia() {
 
   // Mirror the server: only rename a story that still has its default title.
   function applyFolderTitle(name) {
-    if (!name) return;
+    if (!name || !isPrimary) return;
     const titleInput = document.getElementById('titleInput');
     if (!titleInput) return;
     const cur = (titleInput.value || '').trim();
@@ -1823,6 +1842,7 @@ function initMedia() {
     el.dataset.mediaId = m.id;
     el.innerHTML = `
       <div class="media-thumb">
+        <span class="tile-check" aria-hidden="true">✓</span>
         <select class="media-order" aria-label="Position"></select>
         <button type="button" class="media-remove" data-remove="${m.id}" title="Remove">×</button>
         ${thumbInner(m)}
@@ -1929,8 +1949,124 @@ function initMedia() {
     });
   }
 
+  // ── Select mode: tick several tiles and clear them out in one go ──────────
+  // Removing a bad batch one ✕ at a time is nobody's idea of an afternoon.
+  const selectBtn = section.querySelector('[data-select-media]');
+  const selectBar = section.querySelector('[data-select-bar]');
+  if (selectBtn && selectBar) {
+    const countEl = selectBar.querySelector('[data-select-count]');
+    const deleteBtn = selectBar.querySelector('[data-select-delete]');
+    const allBtn = selectBar.querySelector('[data-select-all]');
+    const selected = () => [...grid.querySelectorAll('.media-tile.selected')];
+
+    function update() {
+      const n = selected().length;
+      if (countEl) countEl.textContent = `${n} ${n === 1 ? 'item' : 'items'} selected`;
+      if (deleteBtn) deleteBtn.disabled = !n;
+      if (allBtn) allBtn.textContent = n && n === orderableTiles().length ? 'Select none' : 'Select all';
+    }
+    function exitSelect() {
+      grid.classList.remove('select-mode');
+      selected().forEach((t) => t.classList.remove('selected'));
+      selectBar.hidden = true;
+      selectBtn.classList.remove('on');
+    }
+
+    selectBtn.addEventListener('click', () => {
+      if (grid.classList.contains('select-mode')) return exitSelect();
+      grid.classList.add('select-mode');
+      selectBar.hidden = false;
+      selectBtn.classList.add('on');
+      update();
+    });
+    selectBar.querySelector('[data-select-cancel]').addEventListener('click', exitSelect);
+    if (allBtn) allBtn.addEventListener('click', () => {
+      const tiles = orderableTiles();
+      const all = selected().length === tiles.length;
+      tiles.forEach((t) => t.classList.toggle('selected', !all));
+      update();
+    });
+
+    // Capture phase: in select mode a click ticks the tile instead of reaching
+    // the order dropdown or the per-tile ✕ underneath it.
+    grid.addEventListener('click', (e) => {
+      if (!grid.classList.contains('select-mode')) return;
+      const tile = e.target.closest('.media-tile');
+      if (!tile || tile.classList.contains('uploading') || tile.classList.contains('failed')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      tile.classList.toggle('selected');
+      update();
+    }, true);
+
+    if (deleteBtn) deleteBtn.addEventListener('click', () => {
+      const tiles = selected();
+      if (!tiles.length) return;
+      const n = tiles.length;
+      openDialog({
+        title: 'Remove media?',
+        body: `Remove ${n} ${n === 1 ? 'item' : 'items'} from this story? This can’t be undone.`,
+        confirmLabel: 'Remove',
+        danger: true,
+        onConfirm: async () => {
+          deleteBtn.disabled = true;
+          const ids = tiles.map((t) => t.dataset.mediaId).filter(Boolean);
+          try {
+            const res = await fetch(`/stories/${bookId}/media/bulk-delete`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids }),
+            });
+            if (!res.ok) throw new Error('failed');
+            flipMove(() => tiles.forEach((t) => t.remove()));
+            refreshOrders();
+            await saveOrder();
+            exitSelect();
+            showToast(`${n} ${n === 1 ? 'item' : 'items'} removed ✓`);
+          } catch (_) {
+            showToast('Could not remove those — please try again', 'error');
+          } finally {
+            deleteBtn.disabled = false;
+          }
+        },
+      });
+    });
+  }
+
   orderableTiles().forEach(bindTile);
   refreshOrders();
+}
+
+// ── Editor: alternate endings edited in place ───────────────────────────────
+// Each ending is a fold-out card holding its name and its own photo grid. They
+// start shut so a story with a dozen endings doesn't fetch every thumbnail at
+// once; the name typed inside keeps the card's header honest.
+function initEndingCards() {
+  document.querySelectorAll('[data-ending-card]').forEach((card) => {
+    const head = card.querySelector('[data-ending-toggle]');
+    const body = card.querySelector('.ending-card-body');
+    const label = card.querySelector('[data-ending-label]');
+    const title = card.querySelector('[data-ending-title]');
+    if (!head || !body) return;
+
+    const open = (want) => {
+      body.hidden = !want;
+      card.classList.toggle('open', want);
+      head.setAttribute('aria-expanded', want ? 'true' : 'false');
+    };
+    head.addEventListener('click', () => open(body.hidden));
+
+    if (label && title) {
+      const fallback = title.textContent;
+      label.addEventListener('input', () => { title.textContent = label.value.trim() || fallback; });
+    }
+
+    // "Edit this ending" in the reader links straight to this card.
+    if (card.id && window.location.hash === '#' + card.id) {
+      open(true);
+      requestAnimationFrame(() => card.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    }
+  });
 }
 
 // ── Folder view: sort a folder's stories, remembered per folder ─────────────
@@ -1992,6 +2128,79 @@ function initReaderFigs() {
 
   // Bind each button directly (reliable taps on mobile).
   buttons.forEach((b) => b.addEventListener('click', () => apply(b.dataset.view)));
+}
+
+// ── Reader: fold a story's sections away ────────────────────────────────────
+// A story can run to hundreds of photos, and its endings to hundreds more —
+// folding a section shut is the only way to reach what's under it. Sections
+// start open (the story is what you came for) and the choice is remembered per
+// story, so a story you always read collapsed stays that way.
+function initReaderSections() {
+  document.querySelectorAll('.reader-section').forEach((section) => {
+    const toggle = section.querySelector('[data-section-toggle]');
+    const body = section.querySelector('.section-body');
+    if (!toggle || !body) return;
+    const KEY = `readerSection:${section.dataset.book}:${section.dataset.section}`;
+
+    function apply(open, save) {
+      section.classList.toggle('collapsed', !open);
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (save) { try { localStorage.setItem(KEY, open ? 'open' : 'shut'); } catch (_) { /* private mode */ } }
+    }
+
+    let open = true;
+    try { open = localStorage.getItem(KEY) !== 'shut'; } catch (_) { /* ignore */ }
+    apply(open, false);
+
+    toggle.addEventListener('click', () => apply(section.classList.contains('collapsed'), true));
+  });
+}
+
+// ── Reader: switch between a story's alternate endings ──────────────────────
+// Every ending's gallery is already on the page, so a tab swaps which panel is
+// visible — no page load, and the reader keeps its place instead of being
+// thrown back to the top of the story. The URL follows along so a reload, a
+// share or the back button all land on the ending you were reading.
+function initEndingTabs() {
+  const strip = document.getElementById('endingTabs');
+  if (!strip) return;
+  const tabs = [...strip.querySelectorAll('.ending-tab')];
+  const panels = [...document.querySelectorAll('.ending-panel')];
+  if (!tabs.length) return;
+
+  function show(id, push) {
+    let matched = false;
+    panels.forEach((p) => {
+      const on = p.dataset.ending === id;
+      p.hidden = !on;
+      matched = matched || on;
+    });
+    if (!matched) return;
+    tabs.forEach((t) => {
+      const on = t.dataset.ending === id;
+      t.classList.toggle('on', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    // The photos in the panel just shown were never loaded (see windowImages);
+    // unhiding them is a visibility change, which the observer picks up itself.
+    if (push) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('ending', id);
+      window.history.pushState({ ending: id }, '', url.toString());
+    }
+  }
+
+  strip.addEventListener('click', (e) => {
+    const tab = e.target.closest('.ending-tab');
+    if (!tab) return;
+    e.preventDefault();
+    show(tab.dataset.ending, true);
+  });
+
+  window.addEventListener('popstate', () => {
+    const id = new URL(window.location.href).searchParams.get('ending');
+    show(id || (tabs[0] && tabs[0].dataset.ending), false);
+  });
 }
 
 // ── Reader: window the photo grid ───────────────────────────────────────────
@@ -2099,7 +2308,7 @@ function initTabStrips() {
     const sync = () => strip.classList.toggle('scrollable', strip.scrollWidth > strip.clientWidth + 4);
     sync();
     window.addEventListener('resize', sync);
-    const active = strip.querySelector('a.active, a.on');
+    const active = strip.querySelector('.active, .on');
     if (active && strip.scrollWidth > strip.clientWidth + 4) {
       // Centre it without scrolling the page itself (scrollIntoView would).
       strip.scrollLeft = Math.max(0, active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2);

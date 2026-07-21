@@ -453,7 +453,7 @@ router.get('/admin', ensureAdmin, (req, res) => {
   const adminStats = [
     { label: 'Total stories', value: String(books.length) },
     { label: 'Published', value: String(books.filter((b) => b.status === 'published').length) },
-    { label: 'Drafts & private', value: String(books.filter((b) => b.status !== 'published').length) },
+    { label: 'Private', value: String(books.filter((b) => b.status !== 'published').length) },
     { label: 'Total readers', value: books.reduce((a, b) => a + (b.views || 0), 0).toLocaleString('en-US') },
   ];
 
@@ -483,10 +483,10 @@ router.get('/admin', ensureAdmin, (req, res) => {
   });
 });
 
-// Admin: change a story's visibility (published / private / draft) for any user.
+// Admin: change a story's visibility (published / private) for any user.
 router.post('/admin/stories/:id/status', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const status = ['published', 'private', 'draft'].includes(req.body.status) ? req.body.status : null;
+  const status = ['published', 'private'].includes(req.body.status) ? req.body.status : null;
   const book = Books.findById(id);
   if (book && status) Books.setStatus(id, status);
   res.redirect(req.get('Referer') || '/admin');

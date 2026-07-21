@@ -47,69 +47,103 @@
             </div>
           <% } %>
 
+          <%
+            /* Every long section on this page folds away, and the open/shut
+               choice is remembered per story (see initReaderSections). Sections
+               start open — the story is what you came for. */
+          %>
           <% if (openBook.type === 'novel') { %>
             <% if (blocks && blocks.length) { %>
-              <div class="story-body">
-                <% blocks.forEach(function(b){ %>
-                  <% if (b.type === 'text') { %>
-                    <p><%= b.value %></p>
-                  <% } else if (b.type === 'image') { %>
-                    <figure class="story-img">
-                      <img class="story-img-lazy" data-full="/media/<%= b.mediaId %>" alt="" decoding="async">
-                      <% if (b.caption) { %><figcaption><%= b.caption %></figcaption><% } %>
-                    </figure>
-                  <% } %>
-                <% }) %>
-              </div>
+              <section class="reader-section" data-section="story" data-book="<%= openBook.id %>">
+                <div class="section-head">
+                  <button type="button" class="section-toggle" data-section-toggle aria-expanded="true">
+                    <span class="chev" aria-hidden="true">▾</span>Story
+                  </button>
+                </div>
+                <div class="section-body">
+                  <div class="story-body">
+                    <% blocks.forEach(function(b){ %>
+                      <% if (b.type === 'text') { %>
+                        <p><%= b.value %></p>
+                      <% } else if (b.type === 'image') { %>
+                        <figure class="story-img">
+                          <img class="story-img-lazy" data-full="/media/<%= b.mediaId %>" alt="" decoding="async">
+                          <% if (b.caption) { %><figcaption><%= b.caption %></figcaption><% } %>
+                        </figure>
+                      <% } %>
+                    <% }) %>
+                  </div>
+                </div>
+              </section>
             <% } else if (isOwner) { %>
               <div class="empty"><div class="et">Nothing written yet</div><div class="eh">Open the editor and add paragraphs &amp; images to start.</div></div>
             <% } %>
           <% } else { %>
-          <% /* The list/grid toggle sits with the first gallery on the page. A
-                story whose photos all live in its endings has none up here, so
-                it moves down into the endings section instead. */ %>
-          <% if (photos.length) { %>
+          <% /* One list/grid switch for the page — it drives the story's gallery
+                and every ending's alike, so it sits above them all rather than
+                inside a section that can be folded shut. */ %>
+          <% if (photos.length || endingTabs.length) { %>
             <%- include('partials/figs-view-toggle') %>
           <% } %>
-          <div class="reader-figs" id="readerFigs">
-            <% if (photos.length) { %>
-              <%- include('partials/story-figs', { media: photos }) %>
-            <% } else if (!endingTabs.length) { %>
+          <% if (photos.length) { %>
+            <section class="reader-section" data-section="story" data-book="<%= openBook.id %>">
+              <div class="section-head">
+                <button type="button" class="section-toggle" data-section-toggle aria-expanded="true">
+                  <span class="chev" aria-hidden="true">▾</span>Photos<span class="section-count"><%= photos.length %></span>
+                </button>
+              </div>
+              <div class="section-body">
+                <div class="reader-figs" id="readerFigs">
+                  <%- include('partials/story-figs', { media: photos }) %>
+                </div>
+              </div>
+            </section>
+          <% } else if (!endingTabs.length) { %>
+            <div class="reader-figs" id="readerFigs">
               <div class="empty"><div class="et">No media yet</div><div class="eh">Add photos and films in the editor.</div></div>
-            <% } %>
-          </div>
+            </div>
+          <% } %>
 
           <%
             /* Alternate endings: the story above stays put, and this section
-               swaps between the endings' galleries. */
+               swaps between the endings' galleries. Every ending is on the page
+               already, so a tab is a class flip — no reload, no jump back to
+               the top of the story. */
           %>
           <% if (endingTabs.length) { %>
-            <section class="endings-section">
-              <h3 class="h3">Endings</h3>
-              <div class="ending-tabs" role="tablist" aria-label="Endings">
+            <section class="endings-section reader-section" data-section="endings" data-book="<%= openBook.id %>">
+              <div class="section-head">
+                <button type="button" class="section-toggle" data-section-toggle aria-expanded="true">
+                  <span class="chev" aria-hidden="true">▾</span>Endings<span class="section-count"><%= endingTabs.length %></span>
+                </button>
+              </div>
+              <div class="section-body">
+                <div class="ending-tabs" id="endingTabs" role="tablist" aria-label="Endings" data-book="<%= openBook.id %>">
+                  <% endingTabs.forEach(function(t){ %>
+                    <button type="button" class="ending-tab <%= t.id === openEndingId ? 'on' : '' %>"
+                            data-ending="<%= t.id %>" role="tab"
+                            aria-controls="endingPanel<%= t.id %>"
+                            aria-selected="<%= t.id === openEndingId ? 'true' : 'false' %>"><%= t.label %></button>
+                  <% }) %>
+                </div>
                 <% endingTabs.forEach(function(t){ %>
-                  <a class="ending-tab <%= t.id === openEndingId ? 'on' : '' %>"
-                     href="/reader/<%= openBook.id %>?ending=<%= t.id %>"
-                     role="tab" aria-selected="<%= t.id === openEndingId ? 'true' : 'false' %>"><%= t.label %></a>
-                <% }) %>
-              </div>
-              <div class="ending-toolbar">
-                <% if (isOwner && openEndingId) { %>
-                  <div class="ending-tools">
-                    <a href="/editor?id=<%= openEndingId %>">Edit this ending</a>
-                    <a href="/stories/<%= openEndingId %>/download">⤓ Download</a>
+                  <div class="ending-panel" id="endingPanel<%= t.id %>" data-ending="<%= t.id %>"
+                       role="tabpanel" <%= t.id === openEndingId ? '' : 'hidden' %>>
+                    <% if (isOwner) { %>
+                      <div class="ending-tools">
+                        <a href="/editor?id=<%= openBook.id %>#ending<%= t.id %>">Edit this ending</a>
+                        <a href="/stories/<%= t.id %>/download">⤓ Download</a>
+                      </div>
+                    <% } %>
+                    <div class="reader-figs">
+                      <% if (t.photos.length) { %>
+                        <%- include('partials/story-figs', { media: t.photos }) %>
+                      <% } else { %>
+                        <div class="empty"><div class="et">Nothing in this ending yet</div><div class="eh">Open it in the editor to add photos and films.</div></div>
+                      <% } %>
+                    </div>
                   </div>
-                <% } %>
-                <% if (!photos.length && endingPhotos.length) { %>
-                  <%- include('partials/figs-view-toggle') %>
-                <% } %>
-              </div>
-              <div class="reader-figs" id="endingFigs">
-                <% if (endingPhotos.length) { %>
-                  <%- include('partials/story-figs', { media: endingPhotos }) %>
-                <% } else { %>
-                  <div class="empty"><div class="et">Nothing in this ending yet</div><div class="eh">Open it in the editor to add photos and films.</div></div>
-                <% } %>
+                <% }) %>
               </div>
             </section>
           <% } %>

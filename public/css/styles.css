@@ -279,23 +279,32 @@ a { color: inherit; text-decoration: none; }
 /* No per-figure entrance animation: with hundreds of photos, animating every
    figure at once spikes compositing work on mobile. */
 .reader-figs figure { margin: 0; }
+/* A story's foldable sections. The heading is the control — click it and the
+   body collapses to nothing, so the endings under a 400-photo story are a
+   scroll away instead of a hike. */
+.reader-section { margin-bottom: 8px; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.section-toggle { display: inline-flex; align-items: center; gap: 10px; padding: 0; border: none; background: none; cursor: pointer; font-family: var(--head-font); font-weight: 500; font-size: 21px; color: var(--ink); }
+.section-toggle:hover { color: var(--accent); }
+.section-toggle .chev { font-size: 15px; color: rgba(58,50,42,0.4); transition: transform .2s ease; }
+.section-toggle:hover .chev { color: var(--accent); }
+.reader-section.collapsed .section-toggle .chev { transform: rotate(-90deg); }
+.section-count { font-family: var(--body-font); font-size: 12px; font-weight: 700; color: rgba(58,50,42,0.5); background: rgba(120,80,50,0.09); border-radius: 100px; padding: 3px 10px; }
+.reader-section.collapsed .section-body { display: none; }
+
 /* Alternate endings: one story, several conclusions. The story's own photos sit
    above; this section hangs below them, and its tab strip swaps which ending's
-   photos show. On narrow screens the strip scrolls sideways rather than
-   wrapping, so the gallery below never shifts down. */
+   photos show — every ending is already on the page, so switching never
+   reloads. On narrow screens the strip scrolls sideways rather than wrapping,
+   so the gallery below never shifts down. */
 .endings-section { margin-top: 38px; padding-top: 26px; border-top: 1px solid rgba(120,80,50,0.14); }
-.endings-section .h3 { margin: 0 0 14px; }
-/* Ending actions on the left, the list/grid switch on the right when it has
-   moved down here (a story whose photos all live in its endings). */
-.ending-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
-.ending-toolbar .figs-view-row { margin-bottom: 0; margin-left: auto; }
-.ending-tools { display: flex; gap: 16px; margin: -6px 0 0; font-size: 13px; }
+.ending-tools { display: flex; gap: 16px; margin: -2px 0 16px; font-size: 13px; }
 .ending-tools a { color: var(--accent); text-decoration: none; font-weight: 600; }
 .ending-tools a:hover { text-decoration: underline; }
 .ending-tabs { display: flex; gap: 4px; margin-bottom: 18px; padding: 4px; border-radius: 100px; background: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.8); backdrop-filter: blur(8px); overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
 .ending-tabs::-webkit-scrollbar { display: none; }
 .ending-tabs.scrollable { -webkit-mask-image: linear-gradient(to right, #000 92%, transparent); mask-image: linear-gradient(to right, #000 92%, transparent); }
-.ending-tab { padding: 8px 18px; border-radius: 100px; font-size: 13.5px; font-weight: 600; white-space: nowrap; color: rgba(58,50,42,0.6); text-decoration: none; transition: background .2s, color .2s; }
+.ending-tab { flex: none; padding: 8px 18px; border: none; border-radius: 100px; background: transparent; font-family: inherit; font-size: 13.5px; font-weight: 600; white-space: nowrap; color: rgba(58,50,42,0.6); text-decoration: none; cursor: pointer; transition: background .2s, color .2s; }
 .ending-tab:hover { background: rgba(194,104,62,0.08); }
 .ending-tab.on { background: linear-gradient(135deg, var(--accent), var(--accent-alt)); color: #FFF8F0; box-shadow: 0 4px 12px rgba(194,104,62,0.25); }
 /* Library select mode: story covers take a tick like gallery tiles do. Photos
@@ -320,8 +329,21 @@ a { color: inherit; text-decoration: none; }
 .ending-pick-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .ending-pick-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ending-pick-meta { font-size: 12px; color: rgba(58,50,42,0.55); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ending-pick-edit { flex: none; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
-.ending-pick-edit:hover { text-decoration: underline; }
+/* An ending edited in place: a fold-out card holding its name and its own photo
+   grid, so a story and all its conclusions are managed from one page. Cards
+   start shut — a story with a dozen endings shouldn't fetch every thumbnail
+   before you've asked for one. */
+.ending-cards { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 4px; }
+.ending-card { border-radius: 13px; border: 1px solid rgba(58,50,42,0.14); background: rgba(255,255,255,0.6); overflow: hidden; transition: border-color .15s; }
+.ending-card.open { border-color: rgba(194,104,62,0.4); background: rgba(255,255,255,0.75); }
+.ending-card-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border: none; background: none; text-align: left; cursor: pointer; font-family: inherit; }
+.ending-card-head:hover { background: rgba(194,104,62,0.07); }
+.ending-card-head .chev { flex: none; font-size: 12px; color: rgba(58,50,42,0.4); transition: transform .2s ease; }
+.ending-card:not(.open) .ending-card-head .chev { transform: rotate(-90deg); }
+.ending-card-body { padding: 4px 14px 16px; border-top: 1px solid rgba(58,50,42,0.1); }
+.ending-card-body .media-section { margin-top: 18px; }
+.ending-card-open { display: inline-block; margin-top: 14px; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
+.ending-card-open:hover { text-decoration: underline; }
 .ending-detach { display: flex; align-items: center; gap: 9px; margin-top: 14px; font-size: 13.5px; cursor: pointer; }
 .ending-detach input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 /* Grid layout toggle: up to 4 photos per row (2 on small screens). */
@@ -526,6 +548,26 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .media-name { padding: 9px 11px; font-size: 13px; color: rgba(58,50,42,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .add-media-tile { aspect-ratio: 3/2; border: 1px dashed rgba(150,110,80,0.4); border-radius: 13px; background: transparent; color: rgba(58,50,42,0.4); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; transition: border-color .2s, color .2s; }
 .add-media-tile:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Editor media header — the buttons share one small pill shape. */
+.media-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.media-btn { padding: 8px 14px; border-radius: 10px; font-size: 13px; }
+.media-btn.on { background: linear-gradient(135deg, var(--accent), var(--accent-alt)); color: #FFF8F0; border-color: transparent; }
+
+/* Media select mode: tick a run of tiles, then clear them in one go. The order
+   dropdown and per-tile ✕ step aside while selecting — a click ticks the tile. */
+.media-select-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: 12px 0; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(194,104,62,0.3); background: rgba(194,104,62,0.09); }
+.media-select-bar[hidden] { display: none; }
+.media-select-count { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.media-select-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.media-select-actions .btn:disabled { opacity: 0.45; box-shadow: none; cursor: default; transform: none; filter: none; }
+.media-grid.select-mode .media-tile { cursor: pointer; }
+.media-grid.select-mode .media-tile .media-order,
+.media-grid.select-mode .media-tile .media-remove { display: none; }
+.media-grid.select-mode .media-tile:not(.selected) .media-thumb { opacity: 0.6; }
+.media-grid.select-mode .media-tile.selected { outline: 3px solid var(--accent); outline-offset: -1px; }
+.media-grid.select-mode .tile-check { display: flex; }
+.media-tile.selected .tile-check { color: #fff; background: var(--accent); }
 
 /* ── Favourites empty ─────────────────────────────────────────────────────── */
 .muted-line { color: rgba(58,50,42,0.5); font-size: 15px; margin: 0 0 28px; }

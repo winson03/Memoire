@@ -1,0 +1,54 @@
+<% /* One book's photos & films: upload, reorder, select & remove. Rendered for
+      the story being edited and, inline below it, for each of its alternate
+      endings — so a whole story's media is managed from one page.
+      Locals: mediaBook, media, heading, hint, primary, gridId, lazy. */ %>
+<%
+  var _hint = typeof hint === 'undefined' ? '' : hint;
+  var _primary = typeof primary === 'undefined' ? false : primary;
+  var _gridId = typeof gridId === 'undefined' ? '' : gridId;
+  var _lazy = typeof lazy === 'undefined' ? false : lazy;
+%>
+<div class="media-section" data-media-section <% if (_primary) { %>data-primary="1"<% } %>>
+  <div class="media-head">
+    <div class="t"><%= heading %> <span class="upload-progress" data-upload-progress hidden></span></div>
+    <div class="media-head-actions">
+      <button type="button" class="btn btn-soft media-btn" data-select-media>Select</button>
+      <button type="button" class="btn btn-soft media-btn" data-add-folder>+ Add folder</button>
+      <button type="button" class="btn btn-soft media-btn" data-add-media>+ Add media</button>
+    </div>
+  </div>
+  <% if (_hint) { %><div class="media-hint"><%- _hint %></div><% } %>
+  <input type="file" data-media-input multiple accept="image/*,video/*,application/pdf" hidden>
+  <input type="file" data-folder-input webkitdirectory directory multiple hidden>
+
+  <% /* Select mode: tick tiles, then clear them out in one go. */ %>
+  <div class="media-select-bar" data-select-bar hidden>
+    <span class="media-select-count" data-select-count>0 selected</span>
+    <div class="media-select-actions">
+      <button type="button" class="btn btn-soft media-btn" data-select-all>Select all</button>
+      <button type="button" class="btn btn-soft media-btn" data-select-cancel>Cancel</button>
+      <button type="button" class="btn btn-danger media-btn" data-select-delete>Remove</button>
+    </div>
+  </div>
+
+  <div class="media-grid" <% if (_gridId) { %>id="<%= _gridId %>"<% } %> data-book="<%= mediaBook.id %>">
+    <% media.forEach(function(m, i){ %>
+      <div class="media-tile" data-media-id="<%= m.id %>">
+        <div class="media-thumb">
+          <span class="tile-check" aria-hidden="true">✓</span>
+          <select class="media-order" aria-label="Position"><option><%= i + 1 %></option></select>
+          <button type="button" class="media-remove" data-remove="<%= m.id %>" title="Remove">×</button>
+          <% if (m.telegram_file_id && m.kind === 'photo') { %>
+            <img src="/media/<%= m.id %>?w=640" alt="" draggable="false" <% if (_lazy) { %>loading="lazy"<% } %>>
+          <% } else if (m.telegram_file_id && m.kind === 'video') { %>
+            <video src="/media/<%= m.id %>#t=0.1" muted preload="metadata"></video>
+          <% } else { %>
+            <span class="media-kind"><%= (m.kind || 'file').toUpperCase() %></span>
+          <% } %>
+        </div>
+        <div class="media-name"><%= m.label || m.file_name || 'Untitled' %></div>
+      </div>
+    <% }) %>
+    <button type="button" class="add-media-tile" data-add-tile>+ Add media</button>
+  </div>
+</div>
