@@ -353,7 +353,9 @@ a { color: inherit; text-decoration: none; }
 .figs-view button.active { background: linear-gradient(135deg, var(--accent), var(--accent-alt)); color: #FFF8F0; }
 .reader-figs.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .reader-figs.grid .photo-frame { aspect-ratio: 1; border-radius: 12px; }
-.reader-figs.grid figcaption { display: none; }
+/* Names stay on in the grid, just quieter — clipped to two lines so a long
+   filename can't push its tile out of line with the rest of the row. */
+.reader-figs.grid figcaption { font-size: 13px; line-height: 1.35; margin-top: 7px; text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .reader-figs.grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
 /* No backdrop-filter here: a photo story can render hundreds of these frames at
    once, and each blur forces its own GPU compositing layer — enough of them
@@ -364,7 +366,7 @@ a { color: inherit; text-decoration: none; }
 .photo-frame .ph { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: rgba(58,50,42,0.38); letter-spacing: .08em; }
 .photo-frame.pdf { aspect-ratio: auto; min-height: 480px; }
 .photo-frame.pdf iframe { width: 100%; height: 480px; border: none; }
-.reader-figs figcaption { font-family: var(--head-font); font-style: italic; font-size: 16px; color: rgba(58,50,42,0.52); margin-top: 12px; }
+.reader-figs figcaption { font-family: var(--head-font); font-style: italic; font-size: 16px; color: rgba(58,50,42,0.52); margin-top: 12px; overflow-wrap: anywhere; }
 .more-from { margin-top: 56px; border-top: 1px solid rgba(150,110,80,0.18); padding-top: 30px; }
 .more-from .cover-card { gap: 9px; }
 .more-from .cover-title { font-size: 18px; }
@@ -788,6 +790,13 @@ textarea.input { line-height: 1.5; resize: vertical; }
 .lightbox-nav.next { right: 22px; }
 .lightbox-count { position: fixed; top: 22px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.8); font-size: 13px; font-weight: 600; letter-spacing: .04em; background: rgba(255,255,255,0.12); padding: 5px 12px; border-radius: 100px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 @media (max-width: 640px) { .lightbox-nav { width: 40px; height: 40px; font-size: 26px; } .lightbox-nav.prev { left: 10px; } .lightbox-nav.next { right: 10px; } }
+/* Zoom: the script owns `transform` on the image, so the browser must keep its
+   own gestures (pinch-to-zoom the page, drag the image out) out of the way. */
+.lightbox-backdrop { touch-action: none; }
+.lightbox-backdrop video { touch-action: auto; }
+.lightbox-backdrop img { cursor: zoom-in; transform-origin: center center; will-change: transform; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+.lightbox-backdrop.zoomed img { cursor: grab; border-radius: 0; }
+.lightbox-backdrop.dragging img { cursor: grabbing; }
 
 /* ── Flash messages ───────────────────────────────────────────────────────── */
 .flash { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 100; padding: 12px 20px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 10px 30px rgba(60,40,28,0.18); animation: fadeUp .3s ease both; }

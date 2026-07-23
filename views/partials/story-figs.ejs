@@ -1,9 +1,13 @@
 <% /* One story gallery's figures. Used for the story's own photos and, when it
       has alternate endings, for whichever ending is open below it. */ %>
 <% media.forEach(function(m){ %>
+  <% /* Uploads label themselves from the filename, but rows from older imports
+        can come through blank — fall back to the stored filename so a photo is
+        never nameless in the reader. */ %>
+  <% const figName = (m.label || (m.file_name || '').replace(/\.[^.]+$/, '')).trim(); %>
   <figure>
     <% if (m.telegram_file_id && m.kind === 'photo') { %>
-      <div class="photo-frame"><img data-full="/media/<%= m.id %>" alt="<%= m.label || '' %>" decoding="async"></div>
+      <div class="photo-frame"><img data-full="/media/<%= m.id %>" alt="<%= figName %>" decoding="async"></div>
     <% } else if (m.telegram_file_id && m.kind === 'video') { %>
       <div class="photo-frame"><video src="/media/<%= m.id %>#t=0.1" controls preload="metadata"></video></div>
     <% } else if (m.telegram_file_id && m.kind === 'pdf') { %>
@@ -11,8 +15,8 @@
     <% } else if (m.telegram_file_id) { %>
       <div class="photo-frame"><a class="btn btn-soft" href="/media/<%= m.id %>?download=1">⤓ Download <%= m.label || m.file_name || 'file' %></a></div>
     <% } else { %>
-      <div class="photo-frame"><span class="ph">photo · <%= m.label || 'untitled' %></span></div>
+      <div class="photo-frame"><span class="ph">photo · <%= figName || 'untitled' %></span></div>
     <% } %>
-    <figcaption><%= m.label || '' %></figcaption>
+    <% if (figName) { %><figcaption title="<%= figName %>"><%= figName %></figcaption><% } %>
   </figure>
 <% }) %>

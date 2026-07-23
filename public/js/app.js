@@ -212,6 +212,7 @@ function openLightbox(items, index, onClose) {
 
   function render() {
     const it = items[i];
+    resetZoom();
     if (it.kind === 'video') {
       mediaEl.innerHTML = `<video src="${it.src}" controls autoplay></video>`;
     } else if (FAST_PREVIEW && it.thumb && it.thumb !== it.src) {
@@ -233,10 +234,89 @@ function openLightbox(items, index, onClose) {
     prefetchNeighbours();
   }
   function go(d) { i = (i + d + items.length) % items.length; render(); }
+
+  // ── Zoom & pan ─────────────────────────────────────────────────────────────
+  // Wheel or pinch to zoom, drag to pan, double-click / double-tap to toggle.
+  // Images only — a video keeps its own controls. Zoom always resets when the
+  // viewer moves to another image.
+  const MAX_SCALE = 6;
+  const TAP_SCALE = 2.5;
+  let scale = 1, tx = 0, ty = 0, panned = false;
+
+  function zoomEl() { const el = mediaEl.firstElementChild; return el && el.tagName === 'IMG' ? el : null; }
+
+  function applyZoom(animate) {
+    const el = zoomEl();
+    if (!el) return;
+    // The entry animation is fill-mode `both`, so it keeps owning `transform`
+    // long after it finishes — drop it the moment we take the property over.
+    el.style.animation = 'none';
+    el.style.transition = animate ? 'transform .18s ease' : 'none';
+    el.style.transform = scale === 1 ? '' : `translate(${tx}px, ${ty}px) scale(${scale})`;
+    bd.classList.toggle('zoomed', scale > 1);
+  }
+
+  // Keep the image from being dragged off into the void: it may only pan by as
+  // much as it actually overflows the viewport.
+  function clampPan() {
+    const el = zoomEl();
+    if (!el) return;
+    const maxX = Math.max(0, (el.offsetWidth * scale - window.innerWidth) / 2);
+    const maxY = Math.max(0, (el.offsetHeight * scale - window.innerHeight) / 2);
+    tx = Math.min(maxX, Math.max(-maxX, tx));
+    ty = Math.min(maxY, Math.max(-maxY, ty));
+  }
+
+  // Zoom to `next`, keeping whatever sits under (cx, cy) pinned under it. The
+  // image is centred in the viewport, so its centre is (w/2 + tx, h/2 + ty).
+  function zoomTo(next, cx, cy, animate) {
+    if (!zoomEl()) return;
+    next = Math.min(MAX_SCALE, Math.max(1, next));
+    const k = next / scale;
+    tx = cx - (cx - (window.innerWidth / 2 + tx)) * k - window.innerWidth / 2;
+    ty = cy - (cy - (window.innerHeight / 2 + ty)) * k - window.innerHeight / 2;
+    scale = next;
+    if (scale === 1) { tx = 0; ty = 0; }
+    clampPan();
+    applyZoom(animate);
+  }
+
+  function panBy(dx, dy) { tx += dx; ty += dy; panned = true; clampPan(); applyZoom(false); }
+  function resetZoom() { scale = 1; tx = 0; ty = 0; panned = false; bd.classList.remove('zoomed'); }
+
+  bd.addEventListener('wheel', (e) => {
+    if (!zoomEl()) return;
+    e.preventDefault();
+    zoomTo(scale * Math.exp(-e.deltaY * 0.002), e.clientX, e.clientY, false);
+  }, { passive: false });
+
+  bd.addEventListener('dblclick', (e) => {
+    if (!zoomEl() || e.target.closest('button')) return;
+    zoomTo(scale > 1 ? 1 : TAP_SCALE, e.clientX, e.clientY, true);
+  });
+
+  // Mouse drag to pan (touch dragging is handled with the swipe below).
+  let mx = 0, my = 0;
+  function onMouseMove(e) { panBy(e.clientX - mx, e.clientY - my); mx = e.clientX; my = e.clientY; }
+  function endDrag() {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', endDrag);
+    bd.classList.remove('dragging');
+  }
+  bd.addEventListener('mousedown', (e) => {
+    panned = false; // every fresh press starts out as a plain click
+    if (scale === 1 || e.button !== 0 || !zoomEl()) return;
+    e.preventDefault(); // don't start the browser's own image drag
+    mx = e.clientX; my = e.clientY;
+    bd.classList.add('dragging');
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', endDrag);
+  });
   function close() {
     bd.remove();
     document.body.style.overflow = '';
     document.removeEventListener('keydown', onKey);
+    endDrag(); // drop the pan listeners if the viewer closed mid-drag
     // Tell the caller which image we ended on, so it can bring that one into
     // view (e.g. you paged 20 → 30 in the lightbox, then land back at 30).
     if (typeof onClose === 'function') onClose(i);
@@ -247,20 +327,63 @@ function openLightbox(items, index, onClose) {
     else if (multi && e.key === 'ArrowLeft') go(-1);
   }
 
-  bd.addEventListener('click', (e) => { if (e.target === bd) close(); }); // only the empty backdrop closes
+  // Only the empty backdrop closes — and not when the click ends a pan that
+  // happened to run off the edge of the image.
+  bd.addEventListener('click', (e) => { if (e.target === bd && !panned) close(); });
   bd.querySelector('.lightbox-close').addEventListener('click', close);
   bd.querySelector('.prev').addEventListener('click', (e) => { e.stopPropagation(); go(-1); });
   bd.querySelector('.next').addEventListener('click', (e) => { e.stopPropagation(); go(1); });
   document.addEventListener('keydown', onKey);
 
-  // Touch swipe to change image.
-  let sx = null;
-  bd.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; }, { passive: true });
+  // Touch: two fingers pinch to zoom; one finger pans when zoomed in and
+  // swipes between images when not. Double-tap toggles zoom.
+  const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const midpoint = (t) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+  let touch = null, pinch = null, lastTap = 0;
+
+  bd.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2 && zoomEl()) { pinch = { d: spread(e.touches), s: scale }; touch = null; }
+    else if (e.touches.length === 1 && !pinch) {
+      const t = e.touches[0];
+      touch = { x: t.clientX, y: t.clientY, x0: t.clientX, y0: t.clientY };
+      panned = false;
+    }
+  }, { passive: true });
+
+  bd.addEventListener('touchmove', (e) => {
+    if (pinch && e.touches.length === 2) {
+      e.preventDefault();
+      const m = midpoint(e.touches);
+      zoomTo(pinch.s * (spread(e.touches) / pinch.d), m.x, m.y, false);
+    } else if (touch && scale > 1 && e.touches.length === 1) {
+      e.preventDefault(); // panning, not scrolling the page behind
+      panBy(e.touches[0].clientX - touch.x, e.touches[0].clientY - touch.y);
+      touch.x = e.touches[0].clientX; touch.y = e.touches[0].clientY;
+    }
+  }, { passive: false });
+
   bd.addEventListener('touchend', (e) => {
-    if (sx == null || !multi) return;
-    const dx = e.changedTouches[0].clientX - sx;
-    if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
-    sx = null;
+    if (pinch) {
+      if (e.touches.length === 0) {
+        pinch = null;
+        // Pinching back down to roughly 1x settles cleanly at 1x, centred.
+        if (scale < 1.05) zoomTo(1, window.innerWidth / 2, window.innerHeight / 2, true);
+      }
+      return;
+    }
+    if (!touch) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touch.x0, dy = t.clientY - touch.y0;
+    touch = null;
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      // A tap: pair it with a recent one to make a double-tap zoom.
+      if (!zoomEl() || e.target.closest('button')) return;
+      const now = Date.now();
+      if (now - lastTap < 300) { lastTap = 0; zoomTo(scale > 1 ? 1 : TAP_SCALE, t.clientX, t.clientY, true); }
+      else lastTap = now;
+    } else if (scale === 1 && multi && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+      go(dx < 0 ? 1 : -1);
+    }
   });
 
   render();
