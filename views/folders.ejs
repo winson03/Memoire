@@ -123,16 +123,19 @@
               <a href="/folders">Folders</a><span>/</span>
               <span class="here"><%= openFolder.name %></span>
             </div>
-            <div style="display:flex;gap:10px;align-items:center;">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
               <form action="/folders/<%= openFolder.id %>/delete" method="post" style="margin:0;">
                 <button type="submit" class="btn-delete"
                         data-confirm
                         data-title="Delete folder?"
                         data-body="Deleting “<%= openFolder.name %>” permanently removes all of its stories. This can’t be undone.">Delete folder</button>
               </form>
+              <span id="importProgress" class="upload-progress" hidden></span>
+              <button type="button" class="btn btn-soft" id="importFoldersBtn" data-preset-folder="<%= openFolder.id %>" style="padding:9px 14px;border-radius:10px;font-size:13px;">⇪ Import folders</button>
               <a href="/editor?folder=<%= openFolder.id %>" class="btn btn-soft" style="padding:9px 14px;border-radius:10px;font-size:13px;">+ New story here</a>
             </div>
           </div>
+          <input type="file" id="importFolderInput" webkitdirectory directory multiple hidden>
           <% if (folderBooks.length) { %>
             <% if (folderBooks.length > 1) { %>
               <div class="folder-sort-row">

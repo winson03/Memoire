@@ -1169,6 +1169,9 @@ function initFolderImport() {
   const input = document.getElementById('importFolderInput');
   const zone = document.getElementById('importDropzone');
   const progress = document.getElementById('importProgress');
+  // On a folder's page the button carries the open folder's id, so imports file
+  // straight into it and the dialog drops its "add to folder" chooser.
+  const presetFolder = btn.dataset.presetFolder || null;
 
   function show(text) {
     if (!progress) return;
@@ -1235,6 +1238,10 @@ function initFolderImport() {
     const folderOptions = ['<option value="">No folder</option>']
       .concat(appFolders().map((f) => `<option value="${f.id}">${escapeHtml(f.name)}</option>`))
       .join('');
+    // On a folder's page the destination is fixed, so skip the chooser.
+    const folderPicker = presetFolder ? '' : `
+        <label class="field-label" for="importIntoFolder" style="font-size:12px;">Add the new stories to</label>
+        <select class="pseudo-select" id="importIntoFolder" style="width:100%;cursor:pointer;">${folderOptions}</select>`;
     backdrop.innerHTML = `
       <div class="dialog-card" role="dialog" aria-modal="true">
         <h3>Import folders</h3>
@@ -1250,8 +1257,7 @@ function initFolderImport() {
             <a href="#" data-mode="stories">Separate stories</a>
           </div>
         </div>
-        <label class="field-label" for="importIntoFolder" style="font-size:12px;">Add the new stories to</label>
-        <select class="pseudo-select" id="importIntoFolder" style="width:100%;cursor:pointer;">${folderOptions}</select>
+        ${folderPicker}
         <div class="dialog-actions">
           <button type="button" class="dialog-cancel">Cancel</button>
           <button type="button" class="dialog-confirm accent" id="importGo" disabled>Import</button>
@@ -1351,7 +1357,8 @@ function initFolderImport() {
     backdrop.querySelector('.dialog-cancel').addEventListener('click', close);
     goBtn.addEventListener('click', async () => {
       if (!pending.length) return;
-      const folderId = backdrop.querySelector('#importIntoFolder').value || null;
+      const picker = backdrop.querySelector('#importIntoFolder');
+      const folderId = presetFolder || (picker && picker.value) || null;
       const plans = pending.flatMap(plansFor);
       close();
       await importGroups(plans, folderId);
@@ -1538,22 +1545,33 @@ function initFolderImport() {
   // awaiting the picker, or opens the dialog directly.
   if (input) {
     input.addEventListener('change', async () => {
-      // "Parent/Sub/x.png" → a sub-folder of the picked parent; "Parent/x.png" →
-      // loose inside it. Same one-group-with-subs shape as the other pickers.
+      // The picker can hand back more than one top-level folder (the input is
+      // `multiple`), so key the groups off the first path segment: each selected
+      // folder becomes its own story, and its direct sub-folders (segment two)
+      // become that story's endings. One group per top-level folder — collapsing
+      // them all into a single group merged separately-picked folders into one
+      // story, losing the folder-per-story split.
       const files = Array.from(input.files || []);
-      const rootName = ((files[0] || {}).webkitRelativePath || '').split('/')[0] || 'Import';
-      const loose = [];
-      const map = new Map();
+      const roots = new Map(); // rootName → { files: File[], subs: Map<name, File[]> }
+      const rootOf = (name) => {
+        if (!roots.has(name)) roots.set(name, { files: [], subs: new Map() });
+        return roots.get(name);
+      };
       for (const f of files) {
         const seg = (f.webkitRelativePath || f.name).split('/').filter(Boolean);
+        const r = rootOf(seg.length > 1 ? seg[0] : 'Import');
         if (seg.length > 2) {
-          if (!map.has(seg[1])) map.set(seg[1], []);
-          map.get(seg[1]).push(f);
+          if (!r.subs.has(seg[1])) r.subs.set(seg[1], []);
+          r.subs.get(seg[1]).push(f);
         } else {
-          loose.push(f);
+          r.files.push(f);
         }
       }
-      const groups = [{ name: rootName, files: loose, subs: [...map.entries()].map(([name, fs]) => ({ name, files: fs })) }];
+      const groups = [...roots.entries()].map(([name, r]) => ({
+        name,
+        files: r.files,
+        subs: [...r.subs.entries()].map(([sname, fs]) => ({ name: sname, files: fs })),
+      }));
       input.value = '';
       if (pendingPickerResolve) { const r = pendingPickerResolve; pendingPickerResolve = null; r(groups); }
       else openImportDialog(groups); // input used directly (no dialog awaiting)
