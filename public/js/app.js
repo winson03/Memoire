@@ -1179,7 +1179,11 @@ function initFolderImport() {
     progress.textContent = text || '';
   }
 
-  const isMedia = (f) => /^(image|video)\//.test(f.type || '');
+  // A folder pick doesn't always set a PDF's MIME type, so fall back to the
+  // extension. PDFs upload through the server, which renders each page to an
+  // image — same as dropping one into the editor.
+  const isPdfFile = (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
+  const isMedia = (f) => /^(image|video)\//.test(f.type || '') || isPdfFile(f);
   const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 
   // Keep only photo/video files, sort everything by name, drop empty folders.
@@ -1406,7 +1410,9 @@ function initFolderImport() {
       } catch (_) { /* fall through */ }
       if (!id) { files.forEach((f) => eta.fileDone(f)); return null; }
 
-      // Upload the folder's files, a couple at a time, remembering each media id.
+      // Upload the folder's files, a couple at a time, remembering each media
+      // id. One file can yield several (a PDF renders to one image per page),
+      // so each slot holds a list, kept in file order for the reorder below.
       const ids = new Array(files.length).fill(null);
       const queue = files.map((file, idx) => ({ file, idx }));
       const worker = async () => {
@@ -1434,8 +1440,8 @@ function initFolderImport() {
               res = await postFormWithProgress(`/stories/${id}/media`, fd, (sent) => eta.progress(it.file, sent));
             }
             if (res.ok) {
-              const item = ((await res.json()).items || [])[0];
-              if (item) ids[it.idx] = item.id;
+              const returned = ((await res.json()).items || []).map((x) => x.id).filter((x) => x != null);
+              if (returned.length) ids[it.idx] = returned;
             }
           } catch (_) { /* skip failed file */ }
           eta.fileDone(it.file);
@@ -1443,8 +1449,9 @@ function initFolderImport() {
       };
       await Promise.all(Array.from({ length: Math.min(2, files.length) }, worker));
 
-      // Uploads finish out of order — persist the by-name order.
-      const order = ids.filter((x) => x != null);
+      // Uploads finish out of order — persist the by-name order (a PDF's pages
+      // stay contiguous, in page order, wherever the PDF sat among its siblings).
+      const order = ids.filter(Boolean).flat();
       photosDone += order.length;
       if (order.length > 1) {
         await fetch(`/stories/${id}/media/reorder`, {
