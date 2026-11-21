@@ -167,7 +167,11 @@ const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
   console.log(`\n  Mémoire is running → http://localhost:${PORT}`);
   console.log(`  Media storage:    ${storage.backend === 'telegram' ? 'Telegram' : `local disk (${storage.MEDIA_DIR})`}`);
-  console.log(`  Google sign-in:   ${require('./lib/passport').hasGoogle ? 'enabled' : 'disabled'}\n`);
+  console.log(`  Google sign-in:   ${require('./lib/passport').hasGoogle ? 'enabled' : 'disabled'}`);
+  console.log(`  Thumbnails in:    ${storage.THUMB_DIR}\n`);
+
+  // Make thumbnails/posters for older media in the background, one at a time.
+  require('./lib/backfill').scheduleBackfill();
 
   // Daily DB backup to Telegram, at 00:00 Asia/Kuala_Lumpur (backupDatabase()
   // no-ops if Telegram isn't configured). KL is a fixed UTC+8 with no DST, so

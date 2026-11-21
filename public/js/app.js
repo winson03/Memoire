@@ -579,7 +579,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const el = document.createElement('div');
       el.className = 'block block-image';
       el.dataset.mediaId = mediaId;
-      el.innerHTML = ctrl + `<img src="/media/${mediaId}" alt="">` + '<input class="input block-cap" placeholder="Caption (optional)">';
+      el.innerHTML = ctrl + `<img src="/media/${mediaId}?w=1080" alt="">` + '<input class="input block-cap" placeholder="Caption (optional)">';
       el.querySelector('.block-cap').value = caption || '';
       return el;
     }
@@ -735,6 +735,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Reader: keep only the photos near the viewport loaded (memory-bounded).
   initReaderFigWindow();
+
+  // Videos in the reader and editor: show a still poster instead of loading
+  // the video itself until it's played.
+  document.querySelectorAll('video[data-poster]').forEach(applyVideoPoster);
 
   // "Back" links return to the previous in-app page (the folder, library,
   // favourites, … you came from) rather than a fixed page. Referrer-Policy is
@@ -2399,6 +2403,41 @@ function initReaderFigWindow() {
   if (body) windowImages(Array.from(body.querySelectorAll('img[data-full]')), () => 1080, null);
 }
 
+// ── Video posters ────────────────────────────────────────────────────────────
+// The server answers `<video url>?w=640` with a still JPEG frame (Google
+// Drive's own preview) or a 404 when it has none yet. Showing that instead of
+// opening every video makes grids far lighter: one small image per tile rather
+// than a video request relayed through the server. Results are remembered per
+// URL so scrolling back doesn't re-ask.
+const posterProbes = new Map();
+function probePoster(url) {
+  if (!posterProbes.has(url)) {
+    posterProbes.set(url, new Promise((resolve) => {
+      const im = new Image();
+      im.onload = () => resolve(im.naturalWidth > 0);
+      im.onerror = () => resolve(false);
+      im.src = url;
+    }));
+  }
+  return posterProbes.get(url);
+}
+function videoPosterUrl(full) { return String(full).split('#')[0] + '?w=640'; }
+
+// For a <video data-poster data-fallback-src>: use the poster if the server has
+// one; otherwise load the video's first frame as before.
+function applyVideoPoster(video) {
+  const url = video.dataset.poster;
+  if (!url) return;
+  probePoster(url).then((ok) => {
+    if (ok) { video.poster = url; return; }
+    const fallback = video.dataset.fallbackSrc;
+    if (fallback && video.getAttribute('src') !== fallback) {
+      video.preload = 'metadata';
+      video.src = fallback;
+    }
+  });
+}
+
 // ── Memory-bounded windowing for a MIX of <img> and <video> tiles ───────────
 // Like windowImages, but also handles <video data-full> tiles: a live <video>
 // element holds a decoded frame and iOS caps how many can exist at once, so a
@@ -2410,14 +2449,23 @@ function initReaderFigWindow() {
 function windowMedia(els, widthFor) {
   const mount = (el) => {
     if (el.tagName === 'VIDEO') {
-      const want = el.dataset.full + '#t=0.1';
-      if (el.getAttribute('src') !== want) { el.src = want; el.load(); }
+      // Prefer the server's still poster (a small JPEG); only if there isn't one
+      // load the video itself for its first frame.
+      const token = el._mountToken = {};
+      const poster = videoPosterUrl(el.dataset.full);
+      probePoster(poster).then((ok) => {
+        if (el._mountToken !== token) return; // scrolled away meanwhile
+        if (ok) { if (el.getAttribute('poster') !== poster) el.poster = poster; return; }
+        const want = el.dataset.full + '#t=0.1';
+        if (el.getAttribute('src') !== want) { el.src = want; el.load(); }
+      });
     } else {
       const want = `${el.dataset.full}?w=${widthFor()}`;
       if (el.getAttribute('src') !== want) el.src = want;
     }
   };
   const unmount = (el) => {
+    if (el.tagName === 'VIDEO') { el._mountToken = null; el.removeAttribute('poster'); }
     if (!el.getAttribute('src')) return;
     el.removeAttribute('src');
     if (el.tagName === 'VIDEO') el.load(); // free the decoded frame / media resource

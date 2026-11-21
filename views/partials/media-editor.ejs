@@ -41,7 +41,7 @@
           <% if (m.telegram_file_id && m.kind === 'photo') { %>
             <img src="/media/<%= m.id %>?w=640" alt="" draggable="false" <% if (_lazy) { %>loading="lazy"<% } %>>
           <% } else if (m.telegram_file_id && m.kind === 'video') { %>
-            <video src="/media/<%= m.id %>#t=0.1" muted preload="metadata"></video>
+            <video data-poster="/media/<%= m.id %>?w=640" data-fallback-src="/media/<%= m.id %>#t=0.1" muted preload="none"></video>
           <% } else { %>
             <span class="media-kind"><%= (m.kind || 'file').toUpperCase() %></span>
           <% } %>

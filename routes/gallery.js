@@ -221,6 +221,12 @@ router.post('/', upload.single('file'), async (req, res) => {
       file_size: rec.file_size,
       collection_id: coll ? coll.id : null,
     });
+    const kind = (img.mime || '').startsWith('video/') ? 'video' : 'photo';
+    if (kind === 'photo' && fs.existsSync(req.file.path)) {
+      await storage.warmThumbs(img.telegram_file_id, 'photo', { source: req.file.path, widths: [640] }).catch(() => {});
+    } else {
+      storage.queueWarm(img.telegram_file_id, kind, kind === 'photo' ? { widths: [640] } : {});
+    }
     res.json({ id: img.id, url: '/gallery/' + img.id + '/raw', mime: img.mime, file_name: img.file_name });
   } catch (err) {
     console.error('[gallery upload]', err.message);
@@ -256,6 +262,8 @@ router.post('/register-drive', async (req, res) => {
       file_size: Number(meta.size) || null,
       collection_id: coll ? coll.id : null,
     });
+    const kind = mime.startsWith('video/') ? 'video' : 'photo';
+    storage.queueWarm(img.telegram_file_id, kind, kind === 'photo' ? { widths: [640] } : {});
     res.json({ id: img.id, url: '/gallery/' + img.id + '/raw', mime: img.mime, file_name: img.file_name });
   } catch (err) {
     console.error('[gallery register-drive]', err.message);
@@ -284,6 +292,16 @@ router.get('/:id/raw', async (req, res) => {
     } catch (err) {
       if (res.headersSent) return;
       console.error('[gallery thumb]', err.message);
+    }
+  }
+  // Videos with ?w= get a still poster frame (404 if none yet — the page then
+  // falls back to the video's first frame).
+  if (w && (img.mime || '').startsWith('video/')) {
+    try {
+      return await storage.streamThumb(img.telegram_file_id, w, res, { kind: 'video' });
+    } catch (err) {
+      if (!res.headersSent) res.status(404).send('No poster');
+      return;
     }
   }
   try {

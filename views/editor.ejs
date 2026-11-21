@@ -200,7 +200,7 @@
                     <% } else if (b.type === 'image') { %>
                       <div class="block block-image" data-media-id="<%= b.mediaId %>">
                         <div class="block-ctrl"><button type="button" data-up title="Move up">↑</button><button type="button" data-down title="Move down">↓</button><button type="button" data-del title="Remove">✕</button></div>
-                        <img src="/media/<%= b.mediaId %>" alt="">
+                        <img src="/media/<%= b.mediaId %>?w=1080" alt="" loading="lazy">
                         <input class="input block-cap" placeholder="Caption (optional)" value="<%= b.caption || '' %>">
                       </div>
                     <% } %>

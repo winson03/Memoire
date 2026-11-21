@@ -29,6 +29,19 @@ const STATUS_DEFS = [
   { key: 'private', label: 'Private', desc: 'Only you can see it' },
 ];
 
+// Make a just-uploaded photo's thumbnails while the original is still on this
+// server's disk (the temp upload), so nothing has to be fetched back from
+// storage later. If the temp file is already gone (the local-disk backend
+// moves it), fall back to the background queue. Never fails the upload.
+async function warmFromUpload(rec, tempPath) {
+  if (!rec || !(rec.kind === 'photo' || rec.kind === 'cover' || rec.kind === 'video')) return;
+  if (rec.kind !== 'video' && tempPath && fs.existsSync(tempPath)) {
+    await storage.warmThumbs(rec.file_id, rec.kind, { source: tempPath }).catch(() => {});
+  } else {
+    storage.queueWarm(rec.file_id, rec.kind);
+  }
+}
+
 function ownerOnly(book, req) {
   return book && req.user && book.user_id === req.user.id;
 }
@@ -433,6 +446,7 @@ router.post('/stories/:id/media/register-drive', async (req, res) => {
       position: Media.nextPosition(book.id),
     });
     Books.touch(book.id);
+    storage.queueWarm(media.telegram_file_id, media.kind);
     res.json({ items: [{ id: media.id, kind: media.kind, label: media.label, file_name: media.file_name }] });
   } catch (err) {
     console.error('[media register-drive]', err.message);
@@ -505,6 +519,7 @@ router.post('/stories/:id/media', upload.single('file'), async (req, res) => {
           // it's connected (falls back to the default backend if it isn't).
           const rec = await storage.uploadBuffer(pages[i], `${baseLabel}-p${i + 1}.jpg`, 'image/jpeg', { preferDrive: true });
           items.push(addMedia(rec, `${baseLabel} · p${i + 1}`));
+          storage.queueWarm(rec.file_id, 'photo', { source: pages[i] });
         }
       } else {
         const rec = await storage.saveFile(req.file.path, req.file.originalname, req.file.mimetype);
@@ -513,6 +528,7 @@ router.post('/stories/:id/media', upload.single('file'), async (req, res) => {
     } else {
       const rec = await storage.saveFile(req.file.path, req.file.originalname, req.file.mimetype);
       items.push(addMedia(rec, baseLabel));
+      await warmFromUpload(rec, req.file.path);
     }
 
     Books.touch(book.id);
@@ -553,6 +569,7 @@ router.post('/stories/:id/cover/register-drive', async (req, res) => {
       position: -1,
     });
     Books.setCover(book.id, media.id);
+    storage.queueWarm(media.telegram_file_id, 'cover');
     res.json({ id: media.id, url: '/media/' + media.id });
   } catch (err) {
     console.error('[cover register-drive]', err.message);
@@ -585,6 +602,7 @@ router.post('/stories/:id/cover', upload.single('cover'), async (req, res) => {
       position: -1,
     });
     Books.setCover(book.id, media.id);
+    await warmFromUpload({ file_id: media.telegram_file_id, kind: 'cover' }, req.file.path);
     res.json({ id: media.id, url: '/media/' + media.id });
   } catch (err) {
     console.error('[cover upload]', err.message);
@@ -600,15 +618,26 @@ router.post('/stories/:id/cover', upload.single('cover'), async (req, res) => {
 router.get('/media/:id', async (req, res) => {
   const media = Media.findById(parseInt(req.params.id, 10));
   if (!media || !media.telegram_file_id) return res.status(404).send('Not found');
-  // Grid tiles request a small preview with ?w=<px>; only photos are shrunk.
-  // If thumbnailing fails, fall through to the full image.
+  // Grid tiles and covers request a small preview with ?w=<px>; only photos
+  // and covers are shrunk. If thumbnailing fails, fall through to the full image.
   const w = parseInt(req.query.w, 10);
-  if (w && media.kind === 'photo') {
+  if (w && (media.kind === 'photo' || media.kind === 'cover')) {
     try {
       return await storage.streamThumb(media.telegram_file_id, w, res);
     } catch (err) {
       if (res.headersSent) return;
       console.error('[media thumb]', err.message);
+    }
+  }
+  // Videos with ?w= get a still poster frame, never the video itself — grids
+  // show it instead of opening every video. No poster yet → 404, and the page
+  // falls back to loading the video's first frame.
+  if (w && media.kind === 'video') {
+    try {
+      return await storage.streamThumb(media.telegram_file_id, w, res, { kind: 'video' });
+    } catch (err) {
+      if (!res.headersSent) res.status(404).send('No poster');
+      return;
     }
   }
   try {
