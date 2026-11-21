@@ -176,6 +176,17 @@ const FAST_PREVIEW = document.body.dataset.fastPreview === '1';
 const FAST_MOUNT_ALL_MAX = 150;
 
 // ── Lightbox (full-size image viewer) ────────────────────────────────────────
+// The URL of a screen-sized version of a photo (the server makes it once and
+// keeps it on disk). Two sizes only, so the server caches few variants: 1600
+// px for phones and ordinary screens, 2000 px for large/retina ones.
+function lightboxSrc(src) {
+  if (!src || /^(blob|data):/.test(src)) return src;
+  const long = Math.max(window.innerWidth, window.innerHeight) * (window.devicePixelRatio || 1);
+  const w = long > 1600 ? 2000 : 1600;
+  const base = src.replace(/([?&])w=\d+&?/, '$1').replace(/[?&]$/, '');
+  return base + (base.includes('?') ? '&' : '?') + 'w=' + w;
+}
+
 // Full-screen image viewer. `items` is an array of { src, caption }; the
 // viewer opens at `index` and can slide between images (buttons, arrow keys,
 // swipe).
@@ -200,13 +211,13 @@ function openLightbox(items, index, onClose) {
   const capEl = bd.querySelector('.lightbox-cap');
   const countEl = bd.querySelector('.lightbox-count');
 
-  // Fast preview: warm the originals on either side so arrowing through the
+  // Warm the screen-sized versions on either side so arrowing through the
   // gallery doesn't wait on a download it could have started already.
   function prefetchNeighbours() {
-    if (!FAST_PREVIEW || !multi) return;
-    [-2, -1, 1, 2].forEach((d) => {
+    if (!multi) return;
+    (FAST_PREVIEW ? [-2, -1, 1, 2] : [-1, 1]).forEach((d) => {
       const it = items[(i + d + items.length) % items.length];
-      if (it && it.kind !== 'video') new Image().src = it.src;
+      if (it && it.kind !== 'video') new Image().src = lightboxSrc(it.src);
     });
   }
 
@@ -215,18 +226,23 @@ function openLightbox(items, index, onClose) {
     resetZoom();
     if (it.kind === 'video') {
       mediaEl.innerHTML = `<video src="${it.src}" controls autoplay></video>`;
-    } else if (FAST_PREVIEW && it.thumb && it.thumb !== it.src) {
-      // The grid thumbnail is already decoded in this tab, so it paints on the
-      // click frame — no spinner, no empty viewer. Swap in the full-res
-      // original once it lands (same element, so there's no flash of nothing).
-      mediaEl.innerHTML = `<img src="${it.thumb}" alt="">`;
-      const shown = mediaEl.querySelector('img');
-      const full = new Image();
-      // Ignore a load that arrives after the viewer moved on to another image.
-      full.onload = () => { if (shown.isConnected) shown.src = it.src; };
-      full.src = it.src;
     } else {
-      mediaEl.innerHTML = `<img src="${it.src}" alt="">`;
+      // Show a screen-sized version, not the multi-MB original (that only
+      // loads when you zoom in). The grid thumbnail is usually already
+      // decoded in this tab, so paint it on the click frame and swap the
+      // sharper version in when it lands (same element — no flash of nothing).
+      const disp = lightboxSrc(it.src);
+      const first = it.thumb && it.thumb !== disp && !/^blob:/.test(it.thumb) ? it.thumb : disp;
+      mediaEl.innerHTML = `<img src="${first}" alt="">`;
+      const shown = mediaEl.querySelector('img');
+      shown.dataset.original = it.src;
+      if (first !== disp) {
+        const sharp = new Image();
+        // Ignore a load that arrives after the viewer moved on, or after the
+        // original already took over for zooming.
+        sharp.onload = () => { if (shown.isConnected && !shown.dataset.upgraded) shown.src = disp; };
+        sharp.src = disp;
+      }
     }
     capEl.textContent = it.caption || '';
     capEl.style.display = it.caption ? '' : 'none';
@@ -279,6 +295,19 @@ function openLightbox(items, index, onClose) {
     if (scale === 1) { tx = 0; ty = 0; }
     clampPan();
     applyZoom(animate);
+    if (scale > 1.5) loadOriginal();
+  }
+
+  // Zoomed in past the screen-sized version's detail: fetch the full original
+  // once and swap it in (same rendered size, so the zoom doesn't jump).
+  function loadOriginal() {
+    const el = zoomEl();
+    if (!el || el.dataset.upgraded || !el.dataset.original) return;
+    el.dataset.upgraded = '1';
+    const want = el.dataset.original;
+    const im = new Image();
+    im.onload = () => { if (el.isConnected) el.src = want; };
+    im.src = want;
   }
 
   function panBy(dx, dy) { tx += dx; ty += dy; panned = true; clampPan(); applyZoom(false); }
