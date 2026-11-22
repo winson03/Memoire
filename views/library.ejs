@@ -1,102 +1,166 @@
-<%- include('partials/head', { title: 'Your library' }) %>
+<%- include('partials/head', { title: 'Library' }) %>
 <div class="shell">
   <%- include('partials/sidebar') %>
   <main class="main">
     <%- include('partials/topbar', { pageTitle: 'Your library', searchAction: '/library' }) %>
     <div class="content">
-      <div class="page">
+      <div class="page gallery-page library-page">
+        <%
+          var folderQ = activeFolder ? ('folder=' + activeFolder.id + '&') : '';
+          var heading = activeFolder ? activeFolder.name : 'All';
+          var heartSvg = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>';
+          var playSvg = '<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>';
+          var checkSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+          var dlSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>';
+          var bookSvg = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/></svg>';
+          var coverCells = function (cells) {
+            var out = '';
+            for (var i = 0; i < 3; i++) {
+              var c = cells[i];
+              if (!c) out += '<span class="g-cv-empty"></span>';
+              else if (c.src) out += '<img src="' + c.src + '" alt="" loading="lazy">';
+              else out += '<span style="background:' + c.bg + '"></span>';
+            }
+            return out;
+          };
+          var countLine = function (s, p) {
+            var parts = [];
+            if (s) parts.push(s + ' ' + (s === 1 ? 'story' : 'stories'));
+            if (p) parts.push(p.toLocaleString('en-US') + ' ' + (p === 1 ? 'photo' : 'photos'));
+            return parts.length ? parts.join(' · ') : 'Empty';
+          };
+        %>
 
-        <!-- Tabs: All + one per folder / gallery collection name (matched names merge). -->
-        <div class="gallery-tabs">
-          <div class="sort-toggle">
-            <a href="/library" class="<%= allActive ? 'active' : '' %>">All<span class="tab-count"><%= allCount %></span></a>
-            <% tabs.forEach(function(t){ %>
-              <a href="<%= t.href %>" class="<%= t.active ? 'active' : '' %>"><%= t.name %><span class="tab-count"><%= t.storyCount + t.photoCount %></span></a>
-            <% }) %>
+        <section class="g-colls" aria-label="Folders">
+          <a class="g-coll" href="/library" <%- !activeFolder ? 'aria-current="page"' : '' %>>
+            <span class="g-cv"><%- coverCells(allCover) %></span>
+            <span class="g-coll-name">All</span>
+            <span class="g-coll-count"><%= allCount.toLocaleString('en-US') %> items</span>
+          </a>
+          <% folderCards.forEach(function(f){ %>
+            <a class="g-coll" href="/library?folder=<%= f.id %>" <%- f.active ? 'aria-current="page"' : '' %>>
+              <span class="g-cv"><%- coverCells(f.cover) %></span>
+              <span class="g-coll-name"><%= f.name %></span>
+              <span class="g-coll-count"><%= countLine(f.stories, f.photos) %></span>
+            </a>
+          <% }) %>
+          <button type="button" class="g-coll g-coll-new"
+                  data-create-dialog
+                  data-title="New folder"
+                  data-label="Folder name"
+                  data-existing="<%= JSON.stringify(folders.map(function(f){ return f.name; })) %>"
+                  data-action="/folders">
+            <span class="g-cv g-cv-new" aria-hidden="true">+</span>
+            <span class="g-coll-name">New folder</span>
+            <span class="g-coll-count">&nbsp;</span>
+          </button>
+        </section>
+
+        <div class="g-head">
+          <div>
+            <h2 class="g-title"><%= heading %> <span class="g-count"><%= query ? ('matching “' + query + '” · ') : '' %><%= countLine(storyTotal, photoTotal) %></span></h2>
           </div>
-        </div>
-
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-          <p class="muted-line" style="margin:0;">
-            <% if (query) { %>
-              <%= storyTotal %> <%= storyTotal === 1 ? 'story' : 'stories' %> matching “<%= query %>”<%= activeTab ? (' in “' + activeTab.name + '”') : '' %>.
-            <% } else { %>
-              <%= storyTotal %> <%= storyTotal === 1 ? 'story' : 'stories' %><% if (photoTotal) { %> · <%= photoTotal %> <%= photoTotal === 1 ? 'photo' : 'photos' %><% } %><%= activeTab ? (' in “' + activeTab.name + '”') : ' in your library' %>.
+          <div class="g-tools">
+            <label class="g-sortsel">
+              <span class="sr-only">Sort</span>
+              <select id="librarySortSelect" aria-label="Sort">
+                <option value="latest" <%= sort === 'latest' ? 'selected' : '' %>>Newest</option>
+                <option value="oldest" <%= sort === 'oldest' ? 'selected' : '' %>>Oldest</option>
+                <option value="favourites" <%= sort === 'favourites' ? 'selected' : '' %>>Favourites first</option>
+                <option value="az" <%= sort === 'az' ? 'selected' : '' %>>A–Z</option>
+                <option value="za" <%= sort === 'za' ? 'selected' : '' %>>Z–A</option>
+              </select>
+            </label>
+            <% if (items.length) { %><button type="button" class="g-pill" id="librarySelectBtn">Select</button><% } %>
+            <% if (activeFolder) { %>
+              <form action="/folders/<%= activeFolder.id %>/delete" method="post" class="g-inline">
+                <button type="submit" class="g-pill g-pill-quiet"
+                        data-confirm
+                        data-title="Delete “<%= activeFolder.name %>” and everything in it?"
+                        data-body="<%= countLine(storyTotal, photoTotal) === 'Empty' ? 'This folder is empty.' : ('Its ' + countLine(storyTotal, photoTotal) + ' will be permanently deleted with it. This can’t be undone.') %>">Delete folder</button>
+              </form>
             <% } %>
-          </p>
-          <div style="display:flex;align-items:center;gap:10px;">
-          <% if (storyTotal > 1) { %>
-            <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:100px;font-size:13px;" id="librarySelectBtn">Select</button>
-          <% } %>
-          <label class="folder-sort">Sort
-            <select id="librarySortSelect">
-              <option value="favourites" <%= sort === 'favourites' ? 'selected' : '' %>>Favourites first</option>
-              <option value="latest" <%= sort === 'latest' ? 'selected' : '' %>>Latest first</option>
-              <option value="oldest" <%= sort === 'oldest' ? 'selected' : '' %>>Oldest first</option>
-              <option value="az" <%= sort === 'az' ? 'selected' : '' %>>Name A–Z</option>
-              <option value="za" <%= sort === 'za' ? 'selected' : '' %>>Name Z–A</option>
-            </select>
-          </label>
+            <span id="importProgress" class="g-progress" hidden></span>
+            <div class="g-addmenu">
+              <button type="button" class="g-pill g-pill-primary" id="libraryAddBtn" aria-haspopup="true" aria-expanded="false">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add
+              </button>
+              <div class="g-addpop" id="libraryAddMenu" hidden>
+                <button type="button" id="libraryUploadMedia"><strong>Photos &amp; videos</strong><span>Upload files<%= activeFolder ? (' into “' + activeFolder.name + '”') : '' %></span></button>
+                <button type="button" id="libraryUploadFolder"><strong>A folder of photos</strong><span>Becomes a folder with the same name</span></button>
+                <button type="button" id="importFoldersBtn" <% if (activeFolder) { %>data-preset-folder="<%= activeFolder.id %>"<% } %>><strong>Folders as stories</strong><span>Each computer folder becomes one story</span></button>
+                <a href="/editor"><strong>New story</strong><span>Write from scratch</span></a>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Select-mode action bar: pick several stories, then fold them into one
-             story as its alternate endings. Photos aren't selectable here. -->
-        <div class="assign-bar assign-bar-top" id="librarySelectBar" hidden>
-          <span class="assign-count" id="librarySelectCount">0 selected</span>
-          <div class="assign-actions">
-            <button type="button" class="btn btn-soft" id="librarySelectCancel">Cancel</button>
-            <button type="button" class="btn btn-accent" id="librarySelectEndings">Make endings of…</button>
+        <div class="g-selbar" id="librarySelectBar" hidden>
+          <span class="g-selcount" id="librarySelectCount">0 selected</span>
+          <div class="g-selactions">
+            <button type="button" class="g-selbtn" id="librarySelectMove">Move to folder</button>
+            <button type="button" class="g-selbtn" id="librarySelectDownload">Download</button>
+            <button type="button" class="g-selbtn" id="librarySelectEndings">Make endings of…</button>
+            <button type="button" class="g-selbtn danger" id="librarySelectDelete">Delete</button>
+            <button type="button" class="g-selbtn ghost" id="librarySelectCancel">Done</button>
           </div>
         </div>
 
-        <div class="panel" id="importDropzone" style="padding:16px 18px;margin-bottom:18px;">
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-            <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="importFoldersBtn">⇪ Import folders</button>
-            <button type="button" class="btn btn-soft" style="padding:8px 14px;border-radius:10px;font-size:13px;" id="importGalleryBtn">▦ Import gallery</button>
-            <span id="importProgress" class="upload-progress" hidden></span>
-          </div>
-        </div>
+        <input type="file" id="libraryMediaInput" accept="image/*,video/*" multiple hidden>
+        <input type="file" id="libraryFolderInput" webkitdirectory directory multiple hidden>
         <input type="file" id="importFolderInput" webkitdirectory directory multiple hidden>
-        <input type="file" id="importGalleryInput" accept="image/*,video/*" multiple hidden>
         <script type="application/json" id="importFoldersData"><%- JSON.stringify(folders.map(function(f){ return { id: f.id, name: f.name }; })).replace(/</g, '\\u003c') %></script>
-        <script type="application/json" id="importCollectionsData"><%- JSON.stringify(collections.map(function(c){ return { id: c.id, name: c.name }; })).replace(/</g, '\\u003c') %></script>
         <script type="application/json" id="libraryStoriesData"><%- JSON.stringify(allStories).replace(/</g, '\\u003c') %></script>
 
-        <% if (!items.length) { %>
-          <div class="empty">
-            <div class="ico">✦</div>
-            <div class="et"><%= query ? 'No matching stories' : (activeTab ? ('Nothing in “' + activeTab.name + '” yet') : 'Your library is empty') %></div>
-            <div class="eh"><%= query ? 'Try a different search.' : 'Start your first story, or add photos in the gallery, to see them here.' %></div>
-          </div>
-        <% } else { %>
-          <!-- Stories and photos combined in one paginated grid. Photos are
-               view-only here; uploading/managing them lives on the /gallery page. -->
-          <div class="cover-grid" id="libraryCombined">
-            <% items.forEach(function(it){ %>
-              <% if (it.type === 'story') { %>
-                <%- include('partials/cover-card', { book: it.book, opts: { showFav: true, foot: 'status-meta', lazyCover: true } }) %>
-              <% } else { %>
-                <div class="gallery-tile lib-photo" data-id="<%= it.img.id %>">
-                  <button type="button" class="gallery-fav <%= it.img.is_favourite ? 'faved' : '' %>" aria-label="Favourite"><%= it.img.is_favourite ? '♥' : '♡' %></button>
-                  <% if ((it.img.mime || '').startsWith('video/')) { %>
-                    <video muted preload="metadata" data-full="/gallery/<%= it.img.id %>/raw"></video>
-                    <div class="media-play">▶</div>
+        <div class="gallery-grid g-masonry" id="libraryGrid" data-folder="<%= activeFolder ? activeFolder.id : '' %>">
+          <% items.forEach(function(it){ %>
+            <% if (it.type === 'story') { var b = it.book; var cid = coverImageId(b); var faved = favIds.indexOf(b.id) !== -1; %>
+              <div class="gallery-tile g-story" data-kind="story" data-id="<%= b.id %>" data-ar="0.75">
+                <a class="g-media g-story-cover" href="/reader/<%= b.id %>" style="background: <%= themeGradient(b.theme) %>;" aria-label="<%= b.title %>">
+                  <% if (cid) { %><img src="/media/<%= cid %>?w=640" alt="" loading="lazy"><% } %>
+                  <span class="g-story-veil"></span>
+                  <span class="g-story-text">
+                    <span class="g-story-title"><%= b.title %></span>
+                    <% if (b.author) { %><span class="g-story-author"><%= b.author %></span><% } %>
+                  </span>
+                </a>
+                <span class="media-play g-story-badge"><%- bookSvg %><%= b.status === 'published' ? 'Story' : 'Private story' %></span>
+                <span class="tile-check" aria-hidden="true"><%- checkSvg %></span>
+                <button type="button" class="gallery-fav g-story-fav <%= faved ? 'faved' : '' %>" data-story-fav="<%= b.id %>" aria-label="Favourite" aria-pressed="<%= faved ? 'true' : 'false' %>"><%- heartSvg %></button>
+              </div>
+            <% } else { var img = it.img; var isVideo = (img.mime || '').startsWith('video/'); %>
+              <div class="gallery-tile" data-kind="photo" data-id="<%= img.id %>"<% if (img.width && img.height) { %> data-ar="<%= (img.width / img.height).toFixed(4) %>"<% } %>>
+                <div class="g-media">
+                  <% if (isVideo) { %>
+                    <video muted playsinline preload="none" data-full="/gallery/<%= img.id %>/raw"></video>
+                    <span class="media-play"><%- playSvg %>Video</span>
                   <% } else { %>
-                    <img data-full="/gallery/<%= it.img.id %>/raw" alt="" loading="lazy">
+                    <img src="/gallery/<%= img.id %>/raw?w=640" data-full="/gallery/<%= img.id %>/raw" alt="<%= img.file_name || '' %>" loading="lazy">
                   <% } %>
-                  <% if (it.img.file_name) { %><div class="tile-name" title="<%= it.img.file_name %>"><%= it.img.file_name %></div><% } %>
                 </div>
-              <% } %>
-            <% }) %>
-          </div>
+                <span class="tile-check" aria-hidden="true"><%- checkSvg %></span>
+                <button type="button" class="gallery-fav <%= img.is_favourite ? 'faved' : '' %>" aria-label="Favourite" aria-pressed="<%= img.is_favourite ? 'true' : 'false' %>"><%- heartSvg %></button>
+                <div class="g-foot">
+                  <% if (img.file_name) { %><span class="tile-name" title="<%= img.file_name %>"><%= img.file_name %></span><% } else { %><span></span><% } %>
+                  <a class="g-dl" href="/gallery/<%= img.id %>/raw?download=1" download aria-label="Download"><%- dlSvg %></a>
+                </div>
+              </div>
+            <% } %>
+          <% }) %>
+        </div>
 
-          <% if (totalPages > 1) { %>
-            <% var base = '/library?' + (activeTab ? ('tab=' + encodeURIComponent(activeTab.name) + '&') : '') + (query ? ('q=' + encodeURIComponent(query) + '&') : ''); %>
-            <% var qs = function(p){ return base + 'page=' + p; }; %>
-            <%- include('partials/pager', { page: page, totalPages: totalPages, qs: qs }) %>
-            <div class="pager-info">Page <%= page %> of <%= totalPages %></div>
-          <% } %>
+        <% if (totalPages > 1) { %>
+          <% var base = '/library?' + folderQ + (query ? ('q=' + encodeURIComponent(query) + '&') : ''); %>
+          <% var qs = function(p){ return base + 'page=' + p; }; %>
+          <%- include('partials/pager', { page: page, totalPages: totalPages, qs: qs }) %>
+          <div class="pager-info">Page <%= page %> of <%= totalPages %></div>
+        <% } %>
+
+        <% if (!items.length) { %>
+          <div class="empty g-empty">
+            <div class="et"><%= query ? 'No matching stories' : (activeFolder ? ('Nothing in “' + activeFolder.name + '” yet') : 'Your library is empty') %></div>
+            <div class="eh"><%= query ? 'Try a different search.' : 'Use Add to upload photos and videos, upload a whole folder, or write a new story.' %></div>
+          </div>
         <% } %>
 
       </div>

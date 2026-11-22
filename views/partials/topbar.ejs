@@ -38,7 +38,7 @@
                 var isUpload = n.type === 'upload';
                 var href = '#';
                 if (isLike && n.book_id) href = '/reader/' + n.book_id;
-                else if (isUpload) href = n.book_id ? ('/editor?id=' + n.book_id) : '/gallery';
+                else if (isUpload) href = n.book_id ? ('/editor?id=' + n.book_id) : '/library';
                 var icon = isLike ? '♥' : (isUpload ? '🖼️' : '🎂');
                 var icClass = isLike ? 'like' : (isUpload ? 'upload' : 'cake');
                 var text = n.message;

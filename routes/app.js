@@ -5,7 +5,9 @@ const multer = require('multer');
 const router = express.Router();
 const { ensureAuth, ensureAdmin } = require('../middleware/auth');
 const { Users, Books, Folders, Collections, Favourites, Notifications, Media, Gallery } = require('../lib/queries');
-const { greeting, firstName, storageStats } = require('../lib/view-helpers');
+const { greeting, firstName, storageStats, coverImageId } = require('../lib/view-helpers');
+const { learnSizes } = require('../lib/media-sizes');
+const { themeGradient } = require('../lib/themes');
 const { statusLabel, readersTxt } = require('../lib/themes');
 const storage = require('../lib/storage');
 const drive = require('../lib/drive');
@@ -104,77 +106,42 @@ router.get('/dashboard', (req, res) => {
   });
 });
 
-// ── Library (your stories + gallery photos, grouped by folder/collection) ─────
-// Folders (which group stories) and gallery collections (which group photos)
-// are merged into one set of tabs, keyed by name (case-insensitive). A folder
-// and a collection that share a name become a single combined tab showing both
-// its stories and its photos; a name that exists on only one side gets its own
-// tab. The "All" tab shows everything.
-router.get('/library', (req, res) => {
+// ── Library: folders hold everything ─────────────────────────────────────────
+// One page for all of a user's stories, photos and videos. A folder holds any
+// mix of them; "All" shows everything. Replaces the old separate Folders and
+// Gallery pages (both now redirect here).
+const LIBRARY_SORTS = ['latest', 'oldest', 'favourites', 'az', 'za'];
+
+router.get('/library', (req, res, next) => libraryPage(req, res).catch(next));
+async function libraryPage(req, res) {
   const u = req.user;
   const q = req.query.q || '';
-  const norm = (s) => (s || '').trim().toLowerCase();
-
   const books = Books.listByUser(u.id);
   const folders = Folders.listForUser(u.id);
-  const collections = Collections.listForUser(u.id);
   const allImages = Gallery.listForUser(u.id, 'newest');
 
-  // Union folders + collections into tabs keyed by normalised name.
-  const tabMap = new Map();
-  const ensure = (name) => {
-    const k = norm(name);
-    if (!tabMap.has(k)) tabMap.set(k, { key: k, name, folderIds: [], collectionIds: [] });
-    return tabMap.get(k);
-  };
-  folders.forEach((f) => ensure(f.name).folderIds.push(f.id));
-  collections.forEach((c) => ensure(c.name).collectionIds.push(c.id));
+  // Active folder: ?folder=<id>; legacy ?tab=<name> links resolve by name.
+  let active = null;
+  const fid = parseInt(req.query.folder, 10);
+  if (fid) active = folders.find((f) => f.id === fid) || null;
+  else if (req.query.tab != null) active = Folders.findByName(u.id, String(req.query.tab)) || null;
 
-  const booksIn = (ids) => books.filter((b) => ids.includes(b.folder_id));
-  const imagesIn = (ids) => allImages.filter((i) => ids.includes(i.collection_id));
-
-  // Active tab from ?tab=<name> (normalised); missing/unknown → the "All" tab.
-  const active = req.query.tab != null ? (tabMap.get(norm(req.query.tab)) || null) : null;
-
-  const tabs = [...tabMap.values()].map((t) => ({
-    name: t.name,
-    storyCount: booksIn(t.folderIds).length,
-    photoCount: imagesIn(t.collectionIds).length,
-    active: active ? active.key === t.key : false,
-    href: '/library?tab=' + encodeURIComponent(t.name),
-  }));
-
-  const stories = active ? booksIn(active.folderIds) : books;
-  const images = active ? imagesIn(active.collectionIds) : allImages;
-  const shownStories = filt(stories, q);
-
-  // Sort mode, remembered in the session so it sticks across pages and visits.
-  // A ?sort= in the URL overrides and updates the saved choice.
-  const SORTS = ['favourites', 'oldest', 'latest', 'az', 'za'];
+  // Sort mode, remembered in the session; a ?sort= in the URL updates it.
   let sort = req.query.sort;
-  if (sort && SORTS.includes(sort)) req.session.librarySort = sort;
+  if (sort && LIBRARY_SORTS.includes(sort)) req.session.librarySort = sort;
   else sort = req.session.librarySort;
-  if (!SORTS.includes(sort)) sort = 'latest';
+  if (!LIBRARY_SORTS.includes(sort)) sort = 'latest';
 
-  // One combined list of cards — stories and photos together (photos are hidden
-  // while searching, which filters stories only), then sorted by the chosen
-  // mode. Paginate it: rendering every card at once put hundreds of cover/photo
-  // images in the DOM, and mobile Safari keeps each decoded image in memory
-  // (even off-screen ones it caches), which crashes the tab. A bounded page
-  // keeps the image count — and memory — in check, and each page navigation
-  // frees the previous page entirely.
+  const stories = filt(active ? books.filter((b) => b.folder_id === active.id) : books, q);
+  // Search filters stories by title/author; photos have no text, so they hide.
+  const images = q ? [] : (active ? allImages.filter((i) => i.folder_id === active.id) : allImages);
+
   const favSet = new Set(Favourites.idsForUser(u.id));
   const items = [
-    ...shownStories.map((b) => ({
-      type: 'story', book: b,
-      date: b.created_at || '', title: b.title || '', faved: favSet.has(b.id),
-    })),
-    ...(q ? [] : images.map((i) => ({
-      type: 'photo', img: i,
-      date: i.created_at || '', title: i.label || i.file_name || '', faved: !!i.is_favourite,
-    }))),
+    ...stories.map((b) => ({ type: 'story', book: b, date: b.created_at || '', title: b.title || '', faved: favSet.has(b.id) })),
+    ...images.map((i) => ({ type: 'photo', img: i, date: i.created_at || '', title: i.file_name || '', faved: !!i.is_favourite })),
   ];
-  const byDateDesc = (a, b) => String(b.date).localeCompare(String(a.date)); // newest first
+  const byDateDesc = (a, b) => String(b.date).localeCompare(String(a.date));
   const byName = (a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
   const comparators = {
     latest: byDateDesc,
@@ -184,30 +151,99 @@ router.get('/library', (req, res) => {
     favourites: (a, b) => (Number(b.faved) - Number(a.faved)) || byDateDesc(a, b),
   };
   items.sort(comparators[sort]);
+
+  // Paginated: a bounded page keeps the number of decoded images (and memory,
+  // on the server and in mobile Safari) in check.
   const perPage = 24;
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
   const pageItems = items.slice((page - 1) * perPage, page * perPage);
+  await learnSizes(pageItems.filter((it) => it.type === 'photo').map((it) => it.img));
+
+  // Folder cards: counts + a 3-picture cover (photos first, then story covers).
+  const photoCounts = Gallery.countsByFolder(u.id);
+  const storyCounts = {};
+  books.forEach((b) => { if (b.folder_id) storyCounts[b.folder_id] = (storyCounts[b.folder_id] || 0) + 1; });
+  const coverFor = (photoRows, storyList) => {
+    const cells = photoRows.map((p) => ({ src: '/gallery/' + p.id + '/raw?w=640' }));
+    for (const b of storyList) {
+      if (cells.length >= 3) break;
+      const cid = coverImageId(b);
+      cells.push(cid ? { src: '/media/' + cid + '?w=640' } : { bg: themeGradient(b.theme) });
+    }
+    return cells.slice(0, 3);
+  };
+  const newestFirst = (list) => list.slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  const folderCards = folders.map((f) => ({
+    id: f.id,
+    name: f.name,
+    stories: storyCounts[f.id] || 0,
+    photos: photoCounts[f.id] || 0,
+    active: !!active && active.id === f.id,
+    cover: coverFor(Gallery.coverPhotos(u.id, { folder: f.id }), newestFirst(books.filter((b) => b.folder_id === f.id)).slice(0, 3)),
+  }));
+  const allCover = coverFor(Gallery.coverPhotos(u.id, null), newestFirst(books).slice(0, 3));
 
   res.render('library', {
-    tabs,
-    activeTab: active ? { name: active.name } : null,
-    allActive: !active,
+    folderCards,
+    allCover,
+    activeFolder: active ? { id: active.id, name: active.name } : null,
     allCount: books.length + allImages.length,
     items: pageItems,
-    storyTotal: shownStories.length,
+    storyTotal: stories.length,
     photoTotal: images.length,
     page,
     totalPages,
     query: q,
-    sort, // the active library sort mode (remembered in the session)
+    sort,
     // Every story you own, for the "Make endings of…" chooser — the grid is
     // paginated, so the page's own cards aren't a complete list of targets.
     allStories: books.map((b) => ({ id: b.id, title: b.title })),
-    folders, // feeds the bulk-import popup's "add to folder" dropdown
-    collections, // feeds the gallery-import popup's "assign to collection" chooser
+    folders, // folder choosers (move, import)
   });
+}
+
+// Bulk move: selected stories and/or photos into a folder (or out of any).
+router.post('/library/move', (req, res) => {
+  const body = req.body || {};
+  const ids = (v) => (Array.isArray(v) ? v : []).map((x) => parseInt(x, 10)).filter(Boolean);
+  const fid = parseInt(body.folder_id, 10) || null;
+  const folder = fid ? Folders.findById(fid) : null;
+  if (fid && (!folder || folder.user_id !== req.user.id)) return res.status(404).json({ error: 'Folder not found.' });
+  let moved = 0;
+  ids(body.stories).forEach((id) => {
+    const b = Books.findById(id);
+    if (b && b.user_id === req.user.id) { Books.setFolder(b.id, fid); moved += 1; }
+  });
+  ids(body.photos).forEach((id) => {
+    const img = Gallery.findById(id);
+    if (img && img.user_id === req.user.id) { Gallery.setFolder(img.id, fid); moved += 1; }
+  });
+  res.json({ ok: true, moved, folder_id: fid });
+});
+
+// Bulk delete: selected stories (with their endings and media) and photos.
+router.post('/library/bulk-delete', (req, res) => {
+  const body = req.body || {};
+  const ids = (v) => (Array.isArray(v) ? v : []).map((x) => parseInt(x, 10)).filter(Boolean);
+  let deleted = 0;
+  ids(body.stories).forEach((id) => {
+    const book = Books.findById(id);
+    if (!book || book.user_id !== req.user.id) return;
+    [book, ...Books.listEndings(book.id)]
+      .forEach((b) => Media.listForBook(b.id).forEach((m) => storage.remove(m.telegram_file_id)));
+    Books.remove(book.id);
+    deleted += 1;
+  });
+  ids(body.photos).forEach((id) => {
+    const img = Gallery.findById(id);
+    if (!img || img.user_id !== req.user.id) return;
+    storage.remove(img.telegram_file_id);
+    Gallery.remove(img.id);
+    deleted += 1;
+  });
+  res.json({ ok: true, deleted });
 });
 
 // ── Discover (all published stories, paginated) ───────────────────────────────
@@ -224,40 +260,10 @@ router.get('/discover', (req, res) => {
 
 // ── Folders ───────────────────────────────────────────────────────────────────
 // Hierarchy: Folders → Stories. (Collections feature disabled.)
+// Folders now live on the Library page.
 router.get('/folders', (req, res) => {
-  const u = req.user;
-  const q = req.query.q || '';
-  const rawFolders = Folders.listForUser(u.id);
-
-  // Build folder view-models (story count + cover thumbnails).
-  const folderVM = (f) => {
-    const fb = Books.listByFolder(f.id);
-    return { ...f, count: fb.length, covers: fb.slice(0, 3) };
-  };
-
-  // Collections disabled — pass empty/null so the view's leftover guards are inert.
-  const collections = [];
-  const selectedCollection = null;
-  // const rawCollections = Collections.listForUser(u.id);
-  // const collections = rawCollections.map((c) => {
-  //   const inside = rawFolders.filter((f) => f.collection_id === c.id);
-  //   return { ...c, folderCount: inside.length, folderThemes: inside.slice(0, 3).map((f) => f.theme) };
-  // });
-  // const selId = parseInt(req.query.collection, 10);
-  // const selectedCollection = selId ? rawCollections.find((c) => c.id === selId) || null : null;
-
-  const folders = rawFolders.map(folderVM);
-
-  // Open folder detail → its stories as one flat grid.
-  let openFolder = null;
-  let folderBooks = [];
-  const openId = parseInt(req.query.open, 10);
-  if (openId) {
-    const f = rawFolders.find((x) => x.id === openId);
-    if (f) { openFolder = f; folderBooks = filt(Books.listByFolder(f.id), q); }
-  }
-
-  res.render('folders', { collections, folders, selectedCollection, openFolder, folderBooks });
+  const open = parseInt(req.query.open, 10);
+  res.redirect(open ? '/library?folder=' + open : '/library');
 });
 
 // ── Favourites ─────────────────────────────────────────────────────────────────
@@ -271,34 +277,23 @@ router.get('/favourites', (req, res) => {
   const allFavBooks = Books.listAll().filter((b) => ids.includes(b.id) && (b.status === 'published' || b.user_id === u.id));
   const allFavImages = Gallery.listFavourites(u.id);
 
-  // Same tab model as the library: folders (grouping stories) and gallery
-  // collections (grouping photos) merged by name — but only tabs that actually
-  // hold a favourited item are shown.
+  // Tabs are folders (a folder holds stories and photos) — but only folders
+  // that actually hold a favourited item are shown.
   const folders = Folders.listForUser(u.id);
-  const collections = Collections.listForUser(u.id);
-  const tabMap = new Map();
-  const ensure = (name) => {
-    const k = norm(name);
-    if (!tabMap.has(k)) tabMap.set(k, { key: k, name, folderIds: [], collectionIds: [] });
-    return tabMap.get(k);
-  };
-  folders.forEach((f) => ensure(f.name).folderIds.push(f.id));
-  collections.forEach((c) => ensure(c.name).collectionIds.push(c.id));
+  const booksIn = (fid) => allFavBooks.filter((b) => b.folder_id === fid);
+  const imagesIn = (fid) => allFavImages.filter((i) => i.folder_id === fid);
 
-  const booksIn = (fids) => allFavBooks.filter((b) => fids.includes(b.folder_id));
-  const imagesIn = (cids) => allFavImages.filter((i) => cids.includes(i.collection_id));
-
-  const active = req.query.tab != null ? (tabMap.get(norm(req.query.tab)) || null) : null;
-  const tabs = [...tabMap.values()]
-    .map((t) => ({
-      key: t.key, name: t.name, folderIds: t.folderIds, collectionIds: t.collectionIds,
-      count: booksIn(t.folderIds).length + imagesIn(t.collectionIds).length,
-    }))
+  let active = null;
+  const tabId = parseInt(req.query.folder, 10);
+  if (tabId) active = folders.find((f) => f.id === tabId) || null;
+  else if (req.query.tab != null) active = folders.find((f) => norm(f.name) === norm(req.query.tab)) || null;
+  const tabs = folders
+    .map((f) => ({ id: f.id, name: f.name, count: booksIn(f.id).length + imagesIn(f.id).length }))
     .filter((t) => t.count > 0)
-    .map((t) => ({ ...t, active: active ? active.key === t.key : false, href: '/favourites?tab=' + encodeURIComponent(t.name) }));
+    .map((t) => ({ ...t, active: !!active && active.id === t.id, href: '/favourites?folder=' + t.id }));
 
-  const favBooks = active ? booksIn(active.folderIds) : allFavBooks;
-  const favImagesRaw = active ? imagesIn(active.collectionIds) : allFavImages;
+  const favBooks = active ? booksIn(active.id) : allFavBooks;
+  const favImagesRaw = active ? imagesIn(active.id) : allFavImages;
   const shownBooks = filt(favBooks, q);
   // Photos are hidden while searching (search filters stories only).
   const favImages = q ? [] : favImagesRaw;

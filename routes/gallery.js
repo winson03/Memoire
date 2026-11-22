@@ -10,7 +10,7 @@ const fs = require('fs');
 const archiver = require('archiver');
 const router = express.Router();
 const { ensureAuth } = require('../middleware/auth');
-const { Gallery, Collections, Notifications } = require('../lib/queries');
+const { Gallery, Collections, Folders, Notifications } = require('../lib/queries');
 const { FOLDER_PALETTE } = require('../lib/themes');
 const storage = require('../lib/storage');
 
@@ -32,69 +32,26 @@ const upload = multer({
 
 router.use(ensureAuth);
 
-// Gallery page. ?collection=<id> filters to one collection ("All" otherwise).
-// ?assign=1 (with a collection) enters bulk-assign mode: show ALL images so the
-// user can multi-select which ones belong to the collection.
-router.get('/', (req, res, next) => galleryPage(req, res).catch(next));
-async function galleryPage(req, res) {
-  // Sort modes: newest (default), oldest, or fav (favourites first, then newest).
-  const order = ['oldest', 'fav'].includes(req.query.order) ? req.query.order : 'newest';
-  const baseOrder = order === 'oldest' ? 'oldest' : 'newest';
-  const activeCollection = ownCollection(req, req.query.collection);
-  const assignMode = !!(req.query.assign && activeCollection);
-  // The Favourites tab shows only favourited images (not while assigning/in a collection).
-  const favMode = !assignMode && !activeCollection && !!req.query.favourites;
-  const listCollectionId = assignMode ? null : (activeCollection ? activeCollection.id : null);
-  let images = favMode
-    ? Gallery.listFavourites(req.user.id, baseOrder)
-    : Gallery.listForUser(req.user.id, baseOrder, listCollectionId);
-  // "Favourites first" is a stable re-sort of the newest-ordered list: favourited
-  // images float to the top, keeping their date order within each group.
-  if (order === 'fav') images = images.slice().sort((a, b) => (b.is_favourite ? 1 : 0) - (a.is_favourite ? 1 : 0));
+// The gallery page is now part of the Library (folders hold photos and stories
+// together). Old links still work: ?collection=<id> opens the folder that
+// collection was merged into; ?favourites=1 opens Favourites.
+router.get('/', (req, res) => {
+  if (req.query.favourites) return res.redirect('/favourites');
+  const coll = ownCollection(req, req.query.collection);
+  res.redirect(coll && coll.folder_id ? '/library?folder=' + coll.folder_id : '/library');
+});
 
-  // Paginate normal browsing. Assign mode is deliberately NOT paginated: its
-  // Save posts the ticked ids and drops every collection member that wasn't
-  // posted, so a page holding only some of them would silently empty the rest.
-  const perPage = 20;
-  const total = images.length;
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
-  const pageImages = assignMode ? images : images.slice((page - 1) * perPage, page * perPage);
-
-  // Learn each tile's aspect ratio from its cached 640px thumbnail (a header
-  // read) the first time it's shown, so the masonry grid can lay tiles out
-  // before the images arrive. Tiles still without one get sized on load.
-  // Best-effort: a failure here must never take the page (or the server) down.
-  try {
-    await Promise.all(pageImages.filter((im) => !im.width && im.telegram_file_id).map(async (im) => {
-      const isVideo = (im.mime || '').startsWith('video/');
-      const size = await storage.thumbSize(im.telegram_file_id, 640, isVideo ? 'video' : 'photo').catch(() => null);
-      if (size) { Gallery.setSize(im.id, size.width, size.height); im.width = size.width; im.height = size.height; }
-    }));
-  } catch (err) {
-    console.warn('[gallery] aspect-ratio lookup failed:', err.message);
+// Resolve the folder an upload should land in: folder_id (own folders only),
+// or — from an older page still open in a tab — a collection id mapped to the
+// folder it was merged into.
+function uploadFolder(req) {
+  const fid = parseInt(req.body && req.body.folder_id, 10);
+  if (fid) {
+    const f = Folders.findById(fid);
+    return f && f.user_id === req.user.id ? f.id : null;
   }
-
-  // Cover mosaics for the collection cards (3 newest photos each).
-  const collections = Collections.listForUser(req.user.id);
-  const covers = { all: Gallery.coverPhotos(req.user.id, null), fav: Gallery.coverPhotos(req.user.id, 'fav') };
-  collections.forEach((c) => { covers[c.id] = Gallery.coverPhotos(req.user.id, c.id); });
-
-  res.render('gallery', {
-    images: pageImages,
-    covers,
-    allCount: Gallery.countForUser(req.user.id),
-    page,
-    totalPages,
-    total,
-    order,
-    collections,
-    activeCollection,
-    collectionCounts: Gallery.countsByCollection(req.user.id),
-    favMode,
-    favCount: Gallery.favouriteCount(req.user.id),
-    assignMode,
-  });
+  const coll = ownCollection(req, req.body && req.body.collection_id);
+  return coll && coll.folder_id ? coll.folder_id : null;
 }
 
 // Toggle an image's favourite flag (owner only). AJAX from the tile heart.
@@ -232,7 +189,6 @@ router.post('/', upload.single('file'), async (req, res) => {
   }
   try {
     const rec = await storage.saveFile(req.file.path, req.file.originalname, req.file.mimetype);
-    const coll = ownCollection(req, req.body.collection_id); // uploads land in the open collection
     const img = Gallery.create({
       user_id: req.user.id,
       telegram_file_id: rec.file_id,
@@ -241,7 +197,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       mime: rec.mime,
       file_name: rec.file_name,
       file_size: rec.file_size,
-      collection_id: coll ? coll.id : null,
+      folder_id: uploadFolder(req),
     });
     const kind = (img.mime || '').startsWith('video/') ? 'video' : 'photo';
     if (kind === 'photo' && fs.existsSync(req.file.path)) {
@@ -273,7 +229,6 @@ router.post('/register-drive', async (req, res) => {
     if (!mime.startsWith('image/') && !mime.startsWith('video/')) {
       return res.status(400).json({ error: 'Images and videos only.' });
     }
-    const coll = ownCollection(req, req.body.collection_id);
     const img = Gallery.create({
       user_id: req.user.id,
       telegram_file_id: storage.driveKey(meta.id),
@@ -282,7 +237,7 @@ router.post('/register-drive', async (req, res) => {
       mime,
       file_name: req.body.file_name || meta.name || null,
       file_size: Number(meta.size) || null,
-      collection_id: coll ? coll.id : null,
+      folder_id: uploadFolder(req),
     });
     const kind = mime.startsWith('video/') ? 'video' : 'photo';
     storage.queueWarm(img.telegram_file_id, kind, kind === 'photo' ? { widths: [640] } : {});

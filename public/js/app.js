@@ -748,7 +748,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initLibraryGallery();
 
   // Library: select several stories and fold them into one as its endings.
-  initLibraryEndings();
+  initLibraryMosaic();
 
   // Favourites page: favourited gallery photos (heart to remove, click to zoom).
   initFavouritesGallery();
@@ -786,7 +786,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initFolderImport();
 
   // Library: import media straight into the gallery, assigned to a collection.
-  initGalleryImport();
 
   // Library: sort mode — reload with ?sort= (the server remembers the choice).
   const librarySort = document.getElementById('librarySortSelect');
@@ -1650,111 +1649,47 @@ function initFolderImport() {
   }
 }
 
-// ── Library: import media straight into the gallery, assigned to a collection ──
-// A sibling to the folder import: pick photos/videos, choose a collection to
-// file them under (or none), and they upload to the gallery like a normal
-// gallery upload — then the library reloads to show them.
-function initGalleryImport() {
-  const btn = document.getElementById('importGalleryBtn');
-  if (!btn) return;
-  const input = document.getElementById('importGalleryInput');
-  const progress = document.getElementById('importProgress');
-
-  function collections() {
-    const el = document.getElementById('importCollectionsData');
-    try { return el ? JSON.parse(el.textContent) : []; } catch (_) { return []; }
+// Upload photos/videos into a folder (folderId '' = no folder), two at a time,
+// big videos straight to Google Drive. `show(text)` reports progress. Resolves
+// to the number uploaded.
+async function uploadMediaFiles(files, folderId, show) {
+  const eta = makeUploadEta(files);
+  let done = 0;
+  let uploaded = 0;
+  const label = () => `Uploading ${Math.min(done + 1, files.length)}/${files.length} · ${eta.text()}…`;
+  const ticker = setInterval(() => show(label()), 1000);
+  try {
+    const queue = files.slice();
+    const worker = async () => {
+      for (let file = queue.shift(); file; file = queue.shift()) {
+        show(label());
+        try {
+          let res;
+          if (wantsDriveDirect(file)) {
+            const df = await uploadToDrive(file, (sent) => eta.progress(file, sent));
+            res = await fetch('/gallery/register-drive', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ drive_id: df.id, file_name: file.name, mime: file.type, folder_id: folderId || '' }),
+            });
+          } else {
+            const fd = new FormData();
+            fd.append('file', file);
+            if (folderId) fd.append('folder_id', folderId);
+            res = await postFormWithProgress('/gallery', fd, (sent) => eta.progress(file, sent));
+          }
+          if (res.ok) uploaded += 1;
+        } catch (_) { /* skip failed file */ }
+        eta.fileDone(file);
+        done += 1;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(2, files.length) }, worker));
+  } finally {
+    clearInterval(ticker);
   }
-
-  function show(text) {
-    if (!progress) return;
-    progress.hidden = !text;
-    progress.textContent = text || '';
-  }
-
-  // Ask which collection to file the imported media under. Resolves to the
-  // chosen collection id ('' = no collection), or null if the user cancels.
-  function pickCollection(count) {
-    return new Promise((resolve) => {
-      const backdrop = document.createElement('div');
-      backdrop.className = 'dialog-backdrop';
-      const opts = collections().concat([{ id: '', name: 'No collection' }]);
-      backdrop.innerHTML =
-        '<div class="dialog-card" role="dialog" aria-modal="true">' +
-        `<h3>Add ${count} ${count === 1 ? 'item' : 'items'} to…</h3>` +
-        '<div class="chooser">' +
-        opts.map((c) => `<button type="button" class="chooser-opt" data-id="${c.id}">${escapeHtml(c.name)}</button>`).join('') +
-        '</div><div class="dialog-actions"><button type="button" class="dialog-cancel">Cancel</button></div></div>';
-      document.body.appendChild(backdrop);
-      let done = false;
-      const close = (val) => { if (done) return; done = true; backdrop.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
-      const onKey = (e) => { if (e.key === 'Escape') close(null); };
-      backdrop.addEventListener('click', () => close(null));
-      backdrop.querySelector('.dialog-card').addEventListener('click', (e) => e.stopPropagation());
-      backdrop.querySelector('.dialog-cancel').addEventListener('click', () => close(null));
-      backdrop.querySelectorAll('.chooser-opt').forEach((b) => b.addEventListener('click', () => close(b.dataset.id)));
-      document.addEventListener('keydown', onKey);
-    });
-  }
-
-  btn.addEventListener('click', () => { if (input) input.click(); });
-
-  if (input) input.addEventListener('change', async () => {
-    const files = Array.from(input.files || []).filter((f) => /^(image|video)\//.test(f.type || ''));
-    input.value = '';
-    if (!files.length) return;
-
-    const collectionId = await pickCollection(files.length);
-    if (collectionId === null) return; // cancelled
-
-    const eta = makeUploadEta(files);
-    let done = 0;
-    let uploaded = 0;
-    const label = () => `Uploading ${Math.min(done + 1, files.length)}/${files.length} · ${eta.text()}…`;
-    const ticker = setInterval(() => show(label()), 1000);
-    try {
-      const queue = files.slice();
-      const worker = async () => {
-        for (let file = queue.shift(); file; file = queue.shift()) {
-          show(label());
-          try {
-            let res;
-            if (wantsDriveDirect(file)) {
-              const df = await uploadToDrive(file, (sent) => eta.progress(file, sent));
-              res = await fetch('/gallery/register-drive', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ drive_id: df.id, file_name: file.name, mime: file.type, collection_id: collectionId }),
-              });
-            } else {
-              const fd = new FormData();
-              fd.append('file', file);
-              if (collectionId) fd.append('collection_id', collectionId);
-              res = await postFormWithProgress('/gallery', fd, (sent) => eta.progress(file, sent));
-            }
-            if (res.ok) uploaded += 1;
-          } catch (_) { /* skip failed file */ }
-          eta.fileDone(file);
-          done += 1;
-        }
-      };
-      await Promise.all(Array.from({ length: Math.min(2, files.length) }, worker));
-    } finally {
-      clearInterval(ticker);
-    }
-    show('');
-    // Persist the bell notification before reloading (reload can abort in-flight
-    // fetches, so await it rather than fire-and-forget).
-    if (uploaded > 1) {
-      try {
-        await fetch('/gallery/notify-complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count: uploaded }),
-        });
-      } catch (_) { /* best-effort */ }
-    }
-    location.reload(); // show the new photos in the library grid
-  });
+  show('');
+  return uploaded;
 }
 
 function formatDuration(secs) {
@@ -2541,70 +2476,236 @@ function initTabStrips() {
   });
 }
 
-// Library select mode: tick several story covers, then fold them into one story
-// as its alternate endings. Photos in the mixed grid stay untouchable — only
-// cover cards take a tick.
-function initLibraryEndings() {
-  const grid = document.getElementById('libraryCombined');
+// "Make endings of…": fold the chosen stories into another story as its
+// alternate endings. Used by the Library's select mode.
+function openEndingsChooser(ids) {
+  if (!ids.length) return;
+  let stories = [];
+  try { stories = JSON.parse((document.getElementById('libraryStoriesData') || {}).textContent || '[]'); } catch (_) { /* none */ }
+  // The story that keeps its place in the library — the selected ones become
+  // its endings, so it can't be one of them.
+  const opts = stories.filter((st) => !ids.includes(String(st.id)));
+  if (!opts.length) {
+    showToast('Leave at least one story unselected to hold the endings', 'error');
+    return;
+  }
+  const backdrop = document.createElement('div');
+  backdrop.className = 'dialog-backdrop';
+  backdrop.innerHTML =
+    '<div class="dialog-card" role="dialog" aria-modal="true">' +
+    `<h3>Make ${ids.length} ${ids.length === 1 ? 'story an ending' : 'stories endings'} of…</h3>` +
+    '<p>They keep their own photos and leave your library — readers switch between them as tabs on the story you pick.</p>' +
+    '<div class="chooser">' +
+    opts.map((st) => `<button type="button" class="chooser-opt" data-id="${st.id}">${escapeHtml(st.title)}</button>`).join('') +
+    '</div><div class="dialog-actions"><button type="button" class="dialog-cancel">Cancel</button></div></div>';
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  backdrop.addEventListener('click', close);
+  backdrop.querySelector('.dialog-card').addEventListener('click', (e) => e.stopPropagation());
+  backdrop.querySelector('.dialog-cancel').addEventListener('click', close);
+  backdrop.querySelectorAll('.chooser-opt').forEach((btn) => btn.addEventListener('click', async () => {
+    close();
+    const toast = showToast('Grouping endings…', 'info', 0);
+    try {
+      const res = await fetch('/stories/bulk-endings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, parent_id: btn.dataset.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'failed');
+      const n = data.moved;
+      toast.done(`${n} ${n === 1 ? 'ending' : 'endings'} added to “${data.parent.title}”${data.skipped ? ` · ${data.skipped} skipped` : ''} ✓`, 'info');
+      window.location.href = '/reader/' + data.parent.id;
+    } catch (err) {
+      toast.done('Could not group those stories — please try again', 'error', 3600);
+    }
+  }));
+}
+
+// ── Library: folders hold stories + photos (one Mosaic grid) ────────────────
+function initLibraryMosaic() {
+  const grid = document.getElementById('libraryGrid');
+  if (!grid) return;
+  const folderId = grid.dataset.folder || '';
+  const progress = document.getElementById('importProgress');
+  const show = (text) => { if (progress) { progress.hidden = !text; progress.textContent = text || ''; } };
+  const isMedia = (f) => /^(image|video)\//.test(f.type || '');
+  const folderList = () => {
+    try { return JSON.parse((document.getElementById('importFoldersData') || {}).textContent || '[]'); } catch (_) { return []; }
+  };
+
+  initMasonry(grid);
+  windowMedia(Array.from(grid.querySelectorAll('video[data-full]')), () => 640);
+
+  // "+ Add" menu
+  const addBtn = document.getElementById('libraryAddBtn');
+  const addMenu = document.getElementById('libraryAddMenu');
+  const setMenu = (open) => {
+    if (!addMenu) return;
+    addMenu.hidden = !open;
+    if (addBtn) addBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  if (addBtn && addMenu) {
+    addBtn.addEventListener('click', (e) => { e.stopPropagation(); setMenu(addMenu.hidden); });
+    addMenu.addEventListener('click', (e) => { if (e.target.closest('button, a')) setMenu(false); });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.g-addmenu')) setMenu(false); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setMenu(false); });
+  }
+
+  const finishUpload = async (uploaded, goTo) => {
+    if (uploaded > 1) {
+      try {
+        await fetch('/gallery/notify-complete', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ count: uploaded }),
+        });
+      } catch (_) { /* best-effort */ }
+    }
+    if (goTo) window.location.href = goTo; else window.location.reload();
+  };
+
+  // Photos & videos → the open folder (or no folder on "All").
+  const mediaInput = document.getElementById('libraryMediaInput');
+  const mediaBtn = document.getElementById('libraryUploadMedia');
+  if (mediaBtn && mediaInput) {
+    mediaBtn.addEventListener('click', () => mediaInput.click());
+    mediaInput.addEventListener('change', async () => {
+      const files = Array.from(mediaInput.files || []).filter(isMedia);
+      mediaInput.value = '';
+      if (!files.length) return;
+      const uploaded = await uploadMediaFiles(files, folderId, show);
+      await finishUpload(uploaded);
+    });
+  }
+
+  // A computer folder → a library folder of the same name holding its photos
+  // and videos (files in sub-folders included). Picking a parent with several
+  // folders makes one library folder per top-level folder.
+  const dirInput = document.getElementById('libraryFolderInput');
+  const dirBtn = document.getElementById('libraryUploadFolder');
+  if (dirBtn && dirInput) {
+    dirBtn.addEventListener('click', () => dirInput.click());
+    dirInput.addEventListener('change', async () => {
+      const all = Array.from(dirInput.files || []).filter(isMedia);
+      dirInput.value = '';
+      if (!all.length) { showToast('No photos or videos found in that folder', 'error'); return; }
+      const groups = new Map();
+      all.forEach((f) => {
+        const parts = (f.webkitRelativePath || f.name).split('/');
+        const name = parts.length > 1 ? parts[0] : 'Uploads';
+        if (!groups.has(name)) groups.set(name, []);
+        groups.get(name).push(f);
+      });
+      let uploaded = 0;
+      let lastFolder = null;
+      for (const [name, files] of groups) {
+        let target;
+        try {
+          const res = await fetch('/folders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+            body: JSON.stringify({ name, reuse: 1 }),
+          });
+          target = await res.json();
+          if (!res.ok) throw new Error(target.error || 'failed');
+        } catch (err) {
+          showToast(`Could not create the folder “${name}”`, 'error', 3600);
+          continue;
+        }
+        lastFolder = target.id;
+        uploaded += await uploadMediaFiles(files, String(target.id), (t) => show(t ? `${name}: ${t}` : ''));
+      }
+      await finishUpload(uploaded, groups.size === 1 && lastFolder ? '/library?folder=' + lastFolder : null);
+    });
+  }
+
+  // Favourites: photos and stories each have their own endpoint.
+  grid.addEventListener('click', async (e) => {
+    if (grid.classList.contains('select-mode')) return;
+    const fav = e.target.closest('.gallery-fav');
+    if (fav) {
+      e.preventDefault(); e.stopPropagation();
+      const tile = fav.closest('.gallery-tile');
+      fav.disabled = true;
+      try {
+        const story = tile.dataset.kind === 'story';
+        const res = await fetch(story ? `/stories/${tile.dataset.id}/favourite-ajax` : `/gallery/${tile.dataset.id}/favourite`,
+          { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
+        const data = await res.json();
+        const on = story ? !!data.faved : !!data.favourite;
+        fav.classList.toggle('faved', on);
+        fav.setAttribute('aria-pressed', on ? 'true' : 'false');
+      } catch (_) { /* ignore */ } finally { fav.disabled = false; }
+      return;
+    }
+    // Photos open in the lightbox (stories are links to the reader).
+    const clicked = e.target.closest('.gallery-tile[data-kind="photo"] img, .gallery-tile[data-kind="photo"] video');
+    if (!clicked) return;
+    const items = [...grid.querySelectorAll('.gallery-tile[data-kind="photo"] img, .gallery-tile[data-kind="photo"] video')];
+    openLightbox(
+      items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, thumb: x.currentSrc || x.getAttribute('src') || '', caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
+      items.indexOf(clicked),
+      (end) => { if (items[end]) items[end].scrollIntoView({ block: 'center' }); }
+    );
+  });
+
+  // ── Select mode ────────────────────────────────────────────────────────────
   const selectBtn = document.getElementById('librarySelectBtn');
-  if (!grid || !selectBtn) return;
   const bar = document.getElementById('librarySelectBar');
   const countEl = document.getElementById('librarySelectCount');
-
-  const selectedCards = () => grid.querySelectorAll('.cover-card.selected');
-  const selectedIds = () => [...selectedCards()].map((c) => c.dataset.bookId);
+  const btnMove = document.getElementById('librarySelectMove');
+  const btnDownload = document.getElementById('librarySelectDownload');
+  const btnEndings = document.getElementById('librarySelectEndings');
+  const btnDelete = document.getElementById('librarySelectDelete');
+  const selected = () => [...grid.querySelectorAll('.gallery-tile.selected')];
+  const picked = () => {
+    const out = { stories: [], photos: [] };
+    selected().forEach((t) => out[t.dataset.kind === 'story' ? 'stories' : 'photos'].push(t.dataset.id));
+    return out;
+  };
   const update = () => {
-    const n = selectedCards().length;
-    if (countEl) countEl.textContent = `${n} ${n === 1 ? 'story' : 'stories'} selected`;
+    const p = picked();
+    const n = p.stories.length + p.photos.length;
+    if (countEl) countEl.textContent = n ? `${n} selected` : 'Tap items to select';
+    if (btnMove) btnMove.disabled = !n;
+    if (btnDelete) btnDelete.disabled = !n;
+    if (btnDownload) btnDownload.hidden = !p.photos.length || !!p.stories.length;
+    if (btnEndings) btnEndings.hidden = !p.stories.length || !!p.photos.length;
   };
   const exit = () => {
     grid.classList.remove('select-mode');
-    selectedCards().forEach((c) => c.classList.remove('selected'));
+    selected().forEach((t) => t.classList.remove('selected'));
     if (bar) bar.hidden = true;
   };
-
-  selectBtn.addEventListener('click', () => {
+  if (selectBtn) selectBtn.addEventListener('click', () => {
     grid.classList.add('select-mode');
     if (bar) bar.hidden = false;
     update();
   });
-  document.getElementById('librarySelectCancel').addEventListener('click', exit);
-
-  // Capture phase: in select mode a click ticks the card instead of reaching the
-  // card's own data-href navigation handler (bound in the bubble phase).
+  const cancel = document.getElementById('librarySelectCancel');
+  if (cancel) cancel.addEventListener('click', exit);
+  // Capture phase, so a tap ticks the tile instead of opening the story/photo.
   grid.addEventListener('click', (e) => {
     if (!grid.classList.contains('select-mode')) return;
-    const card = e.target.closest('.cover-card');
-    e.preventDefault();
-    e.stopPropagation();
-    if (!card) return;
-    card.classList.toggle('selected');
+    e.preventDefault(); e.stopPropagation();
+    const tile = e.target.closest('.gallery-tile');
+    if (!tile) return;
+    tile.classList.toggle('selected');
     update();
   }, true);
 
-  function stories() {
-    const el = document.getElementById('libraryStoriesData');
-    try { return el ? JSON.parse(el.textContent) : []; } catch (_) { return []; }
-  }
-
-  document.getElementById('librarySelectEndings').addEventListener('click', () => {
-    const ids = selectedIds();
-    if (!ids.length) return;
-    // The story that keeps its place in the library — the selected ones become
-    // its endings, so it can't be one of them.
-    const opts = stories().filter((s) => !ids.includes(String(s.id)));
-    if (!opts.length) {
-      showToast('Leave at least one story unselected to hold the endings', 'error');
-      return;
-    }
+  if (btnMove) btnMove.addEventListener('click', () => {
+    const p = picked();
+    const n = p.stories.length + p.photos.length;
+    if (!n) return;
+    const opts = folderList().filter((f) => String(f.id) !== folderId).concat([{ id: '', name: 'No folder' }]);
     const backdrop = document.createElement('div');
     backdrop.className = 'dialog-backdrop';
     backdrop.innerHTML =
       '<div class="dialog-card" role="dialog" aria-modal="true">' +
-      `<h3>Make ${ids.length} ${ids.length === 1 ? 'story an ending' : 'stories endings'} of…</h3>` +
-      '<p>They keep their own photos and leave your library — readers switch between them as tabs on the story you pick.</p>' +
+      `<h3>Move ${n} ${n === 1 ? 'item' : 'items'} to…</h3>` +
       '<div class="chooser">' +
-      opts.map((s) => `<button type="button" class="chooser-opt" data-id="${s.id}">${escapeHtml(s.title)}</button>`).join('') +
+      opts.map((f) => `<button type="button" class="chooser-opt" data-id="${f.id}">${escapeHtml(f.name)}</button>`).join('') +
       '</div><div class="dialog-actions"><button type="button" class="dialog-cancel">Cancel</button></div></div>';
     document.body.appendChild(backdrop);
     const close = () => backdrop.remove();
@@ -2613,22 +2714,59 @@ function initLibraryEndings() {
     backdrop.querySelector('.dialog-cancel').addEventListener('click', close);
     backdrop.querySelectorAll('.chooser-opt').forEach((b) => b.addEventListener('click', async () => {
       close();
-      const toast = showToast('Grouping endings…', 'info', 0);
       try {
-        const res = await fetch('/stories/bulk-endings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids, parent_id: b.dataset.id }),
+        const res = await fetch('/library/move', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...p, folder_id: b.dataset.id }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'failed');
-        const n = data.moved;
-        toast.done(`${n} ${n === 1 ? 'ending' : 'endings'} added to “${data.parent.title}”${data.skipped ? ` · ${data.skipped} skipped` : ''} ✓`, 'info');
-        window.location.href = '/reader/' + data.parent.id;
-      } catch (err) {
-        toast.done('Could not group those stories — please try again', 'error', 3600);
-      }
+        if (!res.ok) throw new Error('failed');
+        window.location.reload();
+      } catch (_) { showToast('Could not move those items — please try again', 'error', 3600); }
     }));
+  });
+
+  if (btnDownload) btnDownload.addEventListener('click', async () => {
+    const ids = picked().photos;
+    if (!ids.length) return;
+    const n = ids.length;
+    const label = `${n} ${n === 1 ? 'item' : 'items'}`;
+    const toast = showToast(`Downloading ${label}…`, 'info', 0);
+    btnDownload.disabled = true;
+    const onProgress = (frac) => toast.update(`Downloading ${label}… ${Math.round(frac * 100)}%`);
+    try {
+      if (n === 1) await saveDownload('/gallery/' + ids[0] + '/raw?download=1', undefined, onProgress);
+      else await saveDownload('/gallery/bulk-download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) }, onProgress);
+      toast.done(`Downloaded ${label} ✓`, 'info');
+    } catch (_) {
+      toast.done('Download failed — please try again', 'error', 3600);
+    } finally {
+      btnDownload.disabled = false;
+    }
+  });
+
+  if (btnEndings) btnEndings.addEventListener('click', () => openEndingsChooser(picked().stories));
+
+  if (btnDelete) btnDelete.addEventListener('click', () => {
+    const p = picked();
+    const parts = [];
+    if (p.stories.length) parts.push(`${p.stories.length} ${p.stories.length === 1 ? 'story' : 'stories'}`);
+    if (p.photos.length) parts.push(`${p.photos.length} ${p.photos.length === 1 ? 'photo or video' : 'photos and videos'}`);
+    if (!parts.length) return;
+    openDialog({
+      title: 'Delete permanently?',
+      body: `${parts.join(' and ')} will be deleted. This can’t be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const res = await fetch('/library/bulk-delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p),
+          });
+          if (!res.ok) throw new Error('failed');
+          window.location.reload();
+        } catch (_) { showToast('Could not delete — please try again', 'error', 3600); }
+      },
+    });
   });
 }
 

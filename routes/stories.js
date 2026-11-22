@@ -260,7 +260,7 @@ router.post('/stories/import/notify-complete', (req, res) => {
   const message = `Imported ${s}${photos ? ` · ${p}` : ''}${dest ? ` into “${dest.name}”` : ''}`;
   Notifications.create({ user_id: req.user.id, type: 'upload', book_id: null, message });
 
-  res.json({ ok: true, notification: { message, href: dest ? '/folders?open=' + dest.id : '/library' } });
+  res.json({ ok: true, notification: { message, href: dest ? '/library?folder=' + dest.id : '/library' } });
 });
 
 // ── Bulk: make several stories alternate endings of one story ─────────────────
@@ -372,7 +372,7 @@ router.post('/stories/:id', (req, res) => {
   // A story filed in a folder returns to that folder (you came from there, and
   // history-based "back" is unreliable across the create→edit redirect chain);
   // an unfiled story opens in the reader.
-  res.redirect(ownFolder ? ('/folders?open=' + ownFolder.id) : ('/reader/' + book.id));
+  res.redirect(ownFolder ? ('/library?folder=' + ownFolder.id) : ('/reader/' + book.id));
 });
 
 // ── Delete story ──────────────────────────────────────────────────────────────
