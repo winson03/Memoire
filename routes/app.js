@@ -278,12 +278,19 @@ async function libraryPage(req, res) {
     if (!cells.length) cells.push({ bg: themeGradient(theme || 'terra') });
     return cells;
   };
-  // Last updated = newest of: folder made, any story in it edited, any upload.
-  const latestUpload = Gallery.latestByFolder(u.id);
-  const lastTouch = {};
-  const touch = (fid, t) => { if (fid && t && (!lastTouch[fid] || String(t) > lastTouch[fid])) lastTouch[fid] = String(t); };
-  books.forEach((b) => touch(b.folder_id, b.updated_at || b.created_at));
-  Object.keys(latestUpload).forEach((fid) => touch(Number(fid), latestUpload[fid]));
+  // Dates come from the folder's contents as well as the folder row: folders
+  // made by the collections merge are newer than what they hold, so "created"
+  // is the earliest of the folder and its oldest item, and "updated" the
+  // newest story edit or upload.
+  const uploadDates = Gallery.datesByFolder(u.id);
+  const firstTouch = {}; const lastTouch = {};
+  const touch = (fid, first, last) => {
+    if (!fid) return;
+    if (first && (!firstTouch[fid] || String(first) < firstTouch[fid])) firstTouch[fid] = String(first);
+    if (last && (!lastTouch[fid] || String(last) > lastTouch[fid])) lastTouch[fid] = String(last);
+  };
+  books.forEach((b) => touch(b.folder_id, b.created_at, b.updated_at || b.created_at));
+  Object.keys(uploadDates).forEach((fid) => touch(Number(fid), uploadDates[fid].first, uploadDates[fid].last));
   const newestFirst = (list) => list.slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
   const folderCards = folders.map((f) => ({
     id: f.id,
@@ -291,21 +298,24 @@ async function libraryPage(req, res) {
     stories: storyCounts[f.id] || 0,
     photos: photoCounts[f.id] || 0,
     active: !!active && active.id === f.id,
-    created: f.created_at,
-    updated: [f.created_at, lastTouch[f.id]].filter(Boolean).sort().pop(),
+    fav: !!f.is_fav,
+    created: [f.created_at, firstTouch[f.id]].filter(Boolean).sort()[0],
+    updated: lastTouch[f.id] || [f.created_at, firstTouch[f.id]].filter(Boolean).sort()[0],
     cover: coverFor(Gallery.recentPhotoKeys(u.id, f.id), newestFirst(books.filter((b) => b.folder_id === f.id)).slice(0, 6), f.theme),
   }));
   const allCover = coverFor(Gallery.recentPhotoKeys(u.id, null), newestFirst(books).slice(0, 6), 'terra');
 
   const FOLDER_SORTS = {
+    custom: () => 0, // keep listForUser's order: favourites, then drag order
     updated: (a, b) => String(b.updated || '').localeCompare(String(a.updated || '')),
     created: (a, b) => String(b.created || '').localeCompare(String(a.created || '')),
     name: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }),
     items: (a, b) => (b.stories + b.photos) - (a.stories + a.photos),
   };
-  const fsort = FOLDER_SORTS[req.query.fsort] ? req.query.fsort : 'updated';
+  const fsort = FOLDER_SORTS[req.query.fsort] ? req.query.fsort : 'custom';
+  const favFirst = (a, b) => (Number(b.fav) - Number(a.fav)) || FOLDER_SORTS[fsort](a, b);
   const allFolders = view === 'folders'
-    ? folderCards.filter((f) => !q || f.name.toLowerCase().includes(q.toLowerCase())).sort(FOLDER_SORTS[fsort])
+    ? folderCards.filter((f) => !q || f.name.toLowerCase().includes(q.toLowerCase())).sort(favFirst)
     : [];
 
   res.render('library', {

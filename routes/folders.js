@@ -29,6 +29,23 @@ router.post('/', (req, res) => {
   res.redirect('/library?folder=' + folder.id);
 });
 
+// Star / unstar a folder — favourites are listed first everywhere.
+router.post('/:id/fav', (req, res) => {
+  const folder = Folders.findById(parseInt(req.params.id, 10));
+  if (!folder || folder.user_id !== req.user.id) return res.status(404).json({ error: 'Folder not found.' });
+  const on = req.body && 'on' in req.body ? !!req.body.on && req.body.on !== '0' : !folder.is_fav;
+  Folders.setFav(folder.id, on);
+  res.json({ id: folder.id, fav: on });
+});
+
+// Save the drag-and-drop order from the All folders page.
+router.post('/order', (req, res) => {
+  const ids = (Array.isArray(req.body && req.body.ids) ? req.body.ids : [])
+    .map((x) => parseInt(x, 10)).filter(Boolean).slice(0, 5000);
+  Folders.setOrder(req.user.id, ids);
+  res.json({ ok: true, count: ids.length });
+});
+
 // Delete a folder AND everything in it — its stories (with their endings and
 // media) and its photos/videos — permanently. Owner only.
 router.post('/:id/delete', (req, res) => {

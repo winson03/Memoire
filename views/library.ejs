@@ -54,7 +54,7 @@
           <% folderCards.forEach(function(f){ %>
             <a class="g-coll" href="/library?folder=<%= f.id %>" <%- f.active ? 'aria-current="page"' : '' %>>
               <%- coverCells(f.cover) %>
-              <span class="g-coll-name"><%= f.name %></span>
+              <span class="g-coll-name"><% if (f.fav) { %><span class="g-coll-star" aria-label="Favourite">★</span> <% } %><%= f.name %></span>
               <span class="g-coll-count"><%= countLine(f.stories, f.photos) %></span>
             </a>
           <% }) %>
@@ -193,6 +193,7 @@
               <label class="g-sortsel">
                 <span class="sr-only">Sort folders</span>
                 <select id="folderSortSelect" aria-label="Sort folders">
+                  <option value="custom" <%= fsort === 'custom' ? 'selected' : '' %>>My order</option>
                   <option value="updated" <%= fsort === 'updated' ? 'selected' : '' %>>Last updated</option>
                   <option value="created" <%= fsort === 'created' ? 'selected' : '' %>>Newest created</option>
                   <option value="name" <%= fsort === 'name' ? 'selected' : '' %>>Name A–Z</option>
@@ -205,18 +206,25 @@
                       data-action="/folders">+ New folder</button>
             </div>
           </div>
+          <% var canDrag = fsort === 'custom' && !query; %>
+          <p class="g-fhint">★ Star your favourite folders to keep them first.<%= canDrag ? ' Drag folders to change the order.' : ' Choose “My order” to drag folders into place.' %></p>
           <% if (allFolders.length) { %>
-            <div class="g-fgrid">
+            <div class="g-fgrid" id="folderGrid" <%- canDrag ? 'data-sortable="1"' : '' %>>
               <% allFolders.forEach(function(f){ %>
-                <a class="g-fcard" href="/library?folder=<%= f.id %>">
-                  <%- coverCells(f.cover) %>
-                  <span class="g-coll-name"><%= f.name %></span>
+                <div class="g-fcard<%= f.fav ? ' is-fav' : '' %>" data-id="<%= f.id %>" data-fav="<%= f.fav ? 1 : 0 %>" <%- canDrag ? 'draggable="true"' : '' %>>
+                  <a class="g-fcard-link" href="/library?folder=<%= f.id %>" draggable="false">
+                    <%- coverCells(f.cover) %>
+                    <span class="g-coll-name"><%= f.name %></span>
+                  </a>
+                  <button type="button" class="g-fstar" data-folder-fav="<%= f.id %>" aria-pressed="<%= f.fav ? 'true' : 'false' %>" aria-label="<%= f.fav ? 'Remove from favourites' : 'Add to favourites' %>" title="<%= f.fav ? 'Favourite' : 'Add to favourites' %>">
+                    <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                  </button>
                   <span class="g-coll-count"><%= countLine(f.stories, f.photos) %></span>
                   <span class="g-fdates">
                     <span><span class="g-fdate-k">Created</span> <%= fmtDate(f.created) %></span>
                     <span title="<%= f.updated %> UTC"><span class="g-fdate-k">Updated</span> <%= fmtDate(f.updated) %></span>
                   </span>
-                </a>
+                </div>
               <% }) %>
             </div>
           <% } else { %>

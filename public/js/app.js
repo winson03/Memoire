@@ -788,6 +788,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Library: import media straight into the gallery, assigned to a collection.
 
   // Library: sort mode — reload with ?sort= (the server remembers the choice).
+  initFolderFavsAndOrder();
+
   const folderSort = document.getElementById('folderSortSelect');
   if (folderSort) folderSort.addEventListener('change', () => {
     const url = new URL(window.location.href);
@@ -3342,4 +3344,75 @@ function initGlobalSearch(form, input) {
   });
   document.addEventListener('click', (e) => { if (!form.contains(e.target)) close(); });
   form.addEventListener('submit', () => { showPageLoader(); });
+}
+
+
+// ── All folders: ★ favourites and drag-and-drop order ─────────────────────────
+function initFolderFavsAndOrder() {
+  const grid = document.getElementById('folderGrid');
+  if (!grid) return;
+  const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+  grid.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-folder-fav]');
+    if (!btn) return;
+    e.preventDefault();
+    const card = btn.closest('.g-fcard');
+    const on = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    card.classList.toggle('is-fav', on);
+    card.dataset.fav = on ? '1' : '0';
+    try {
+      const res = await post('/folders/' + btn.dataset.folderFav + '/fav', { on: on ? 1 : 0 });
+      if (!res.ok) throw new Error('failed');
+      // Favourites lead the list: move the card to the end of the favourites.
+      const cards = Array.from(grid.querySelectorAll('.g-fcard'));
+      const lastFav = cards.filter((c) => c !== card && c.dataset.fav === '1').pop();
+      if (on) { if (lastFav) lastFav.after(card); else grid.prepend(card); }
+      else if (lastFav) lastFav.after(card);
+      showToast(on ? 'Added to favourites' : 'Removed from favourites', 'success', 1800);
+    } catch (_) {
+      btn.setAttribute('aria-pressed', on ? 'false' : 'true');
+      card.classList.toggle('is-fav', !on);
+      card.dataset.fav = on ? '0' : '1';
+      showToast('Could not update — please try again', 'error', 3000);
+    }
+  });
+
+  if (!grid.dataset.sortable) return;
+  let dragging = null; let startOrder = '';
+  const order = () => Array.from(grid.querySelectorAll('.g-fcard')).map((c) => c.dataset.id);
+  grid.addEventListener('dragstart', (e) => {
+    const card = e.target.closest('.g-fcard');
+    if (!card) return;
+    dragging = card; startOrder = order().join(',');
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', card.dataset.id); } catch (_) { /* old browsers */ }
+  });
+  grid.addEventListener('dragover', (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    const over = e.target.closest('.g-fcard');
+    if (!over || over === dragging) return;
+    // Favourites stay ahead of the rest: only reorder within the same group.
+    if (over.dataset.fav !== dragging.dataset.fav) return;
+    const r = over.getBoundingClientRect();
+    const after = (e.clientX - r.left) > r.width / 2;
+    if (after) over.after(dragging); else over.before(dragging);
+  });
+  const finish = async () => {
+    if (!dragging) return;
+    dragging.classList.remove('dragging');
+    dragging = null;
+    const ids = order();
+    if (ids.join(',') === startOrder) return;
+    try {
+      const res = await post('/folders/order', { ids });
+      if (!res.ok) throw new Error('failed');
+      showToast('Folder order saved', 'success', 1500);
+    } catch (_) { showToast('Could not save the order — please try again', 'error', 3000); }
+  };
+  grid.addEventListener('drop', (e) => { e.preventDefault(); finish(); });
+  grid.addEventListener('dragend', finish);
 }
