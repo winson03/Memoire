@@ -84,7 +84,6 @@ async function galleryPage(req, res) {
     images: pageImages,
     covers,
     allCount: Gallery.countForUser(req.user.id),
-    themeable: true,
     page,
     totalPages,
     total,

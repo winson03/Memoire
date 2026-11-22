@@ -12,18 +12,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/styles.css?v=<%= typeof assetVer === 'function' ? assetVer('css/styles.css') : '' %>">
 <link rel="stylesheet" href="/css/theme.css?v=<%= typeof assetVer === 'function' ? assetVer('css/theme.css') : '' %>">
-<% if (typeof themeable !== 'undefined' && themeable) { %>
-<script>
-  // Pages redesigned for light/dark pick the saved theme (or the device's) before
-  // first paint, so there's no flash of the wrong one. Other pages stay light.
-  (function () {
-    var t = null;
-    try { t = localStorage.getItem('memoire-theme'); } catch (e) {}
-    if (t !== 'light' && t !== 'dark') t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', t);
-  })();
-</script>
-<% } %>
 </head>
 <body data-drive-direct="<%= typeof driveDirect !== 'undefined' && driveDirect ? '1' : '0' %>" data-drive-min="<%= typeof driveMinBytes !== 'undefined' ? driveMinBytes : '' %>" data-fast-preview="<%= typeof fastPreview !== 'undefined' && fastPreview ? '1' : '0' %>">
 <div class="page-loader" id="pageLoader"><div class="page-loader-spin"></div></div>

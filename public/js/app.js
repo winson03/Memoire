@@ -740,7 +740,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Standalone image gallery.
   initGallery();
-  initThemeToggle();
 
   // Folder / collection tabs: one scrolling line, with an overflow hint.
   initTabStrips();
@@ -2709,27 +2708,6 @@ function initFavouritesGallery() {
 }
 
 // ── Standalone image gallery (upload, delete, lightbox) ─────────────────────
-// ── Light / dark theme (only on pages redesigned for it) ────────────────────
-// The saved choice is applied before first paint by an inline script in
-// partials/head.ejs; this just flips it and remembers the new one.
-function initThemeToggle() {
-  const btn = document.getElementById('themeToggle');
-  if (!btn) return;
-  const root = document.documentElement;
-  const sync = () => {
-    const dark = root.getAttribute('data-theme') === 'dark';
-    btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
-    btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
-  };
-  sync();
-  btn.addEventListener('click', () => {
-    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
-    try { localStorage.setItem('memoire-theme', next); } catch (_) { /* private mode */ }
-    sync();
-  });
-}
-
 // ── Masonry grid (Gallery) ──────────────────────────────────────────────────
 // CSS grid with 4px rows: each tile spans as many rows as its aspect ratio
 // needs, so tiles keep their real shape while reading left-to-right in date
