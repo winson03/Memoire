@@ -259,7 +259,7 @@
 /* Video whose still frame isn't ready yet: a quiet placeholder, no streaming */
 .gallery-page video.no-poster {
   background:
-    radial-gradient(circle at 50% 50%, rgba(255,255,255,.14) 0 22px, transparent 23px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 56'%3E%3Ccircle cx='28' cy='28' r='28' fill='rgba(255,255,255,0.9)'/%3E%3Cpath d='M23 18.5v19l15-9.5z' fill='%232f2420'/%3E%3C/svg%3E") center / 56px 56px no-repeat,
     linear-gradient(135deg, #5a4034, #2f2420);
   min-height: 160px;
 }
