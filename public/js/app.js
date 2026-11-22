@@ -740,6 +740,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Standalone image gallery.
   initGallery();
+  initThemeToggle();
 
   // Folder / collection tabs: one scrolling line, with an overflow hint.
   initTabStrips();
@@ -2708,9 +2709,95 @@ function initFavouritesGallery() {
 }
 
 // ── Standalone image gallery (upload, delete, lightbox) ─────────────────────
+// ── Light / dark theme (only on pages redesigned for it) ────────────────────
+// The saved choice is applied before first paint by an inline script in
+// partials/head.ejs; this just flips it and remembers the new one.
+function initThemeToggle() {
+  const btn = document.getElementById('themeToggle');
+  if (!btn) return;
+  const root = document.documentElement;
+  const sync = () => {
+    const dark = root.getAttribute('data-theme') === 'dark';
+    btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+    btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+  };
+  sync();
+  btn.addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('memoire-theme', next); } catch (_) { /* private mode */ }
+    sync();
+  });
+}
+
+// ── Masonry grid (Gallery) ──────────────────────────────────────────────────
+// CSS grid with 4px rows: each tile spans as many rows as its aspect ratio
+// needs, so tiles keep their real shape while reading left-to-right in date
+// order (CSS columns would read top-to-bottom). The ratio comes from the
+// server (data-ar, learned from the thumbnail) or, failing that, from the image
+// once it loads.
+function initMasonry(grid) {
+  if (!grid || !grid.classList.contains('g-masonry')) return;
+  const ROW = 4;
+  const ratioOf = (tile) => parseFloat(tile.dataset.ar) || 1;
+  const sizeTile = (tile, colW) => {
+    const media = tile.querySelector('.g-media');
+    if (!media) return;
+    const ar = ratioOf(tile);
+    media.style.setProperty('--ar', String(ar));
+    const gap = parseFloat(getComputedStyle(tile).marginBottom) || 0;
+    tile.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil((colW / ar + gap) / ROW));
+  };
+  const colWidth = () => {
+    const first = grid.querySelector('.gallery-tile');
+    return first ? first.getBoundingClientRect().width : 0;
+  };
+  const watch = (tile) => {
+    if (tile.dataset.ar) return;
+    const img = tile.querySelector('img');
+    const learn = () => {
+      if (!img.naturalWidth || !img.naturalHeight) return;
+      tile.dataset.ar = (img.naturalWidth / img.naturalHeight).toFixed(4);
+      sizeTile(tile, colWidth());
+    };
+    if (img) { if (img.complete) learn(); else img.addEventListener('load', learn, { once: true }); }
+    const vid = tile.querySelector('video');
+    if (vid) vid.addEventListener('loadedmetadata', () => {
+      if (!vid.videoWidth || !vid.videoHeight || tile.dataset.ar) return;
+      tile.dataset.ar = (vid.videoWidth / vid.videoHeight).toFixed(4);
+      sizeTile(tile, colWidth());
+    });
+  };
+  const layout = () => {
+    const w = colWidth();
+    if (!w) return;
+    grid.querySelectorAll('.gallery-tile').forEach((t) => sizeTile(t, w));
+  };
+  grid.querySelectorAll('.gallery-tile').forEach(watch);
+  layout();
+  let raf = 0;
+  const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(layout); };
+  if ('ResizeObserver' in window) new ResizeObserver(schedule).observe(grid);
+  else window.addEventListener('resize', schedule);
+  // Tiles added after load (fresh uploads) get sized and watched too.
+  new MutationObserver((muts) => {
+    muts.forEach((m) => m.addedNodes.forEach((n) => {
+      if (n.nodeType === 1 && n.classList.contains('gallery-tile')) { watch(n); sizeTile(n, colWidth()); }
+    }));
+  }).observe(grid, { childList: true });
+}
+
+const GALLERY_ICONS = {
+  heart: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
+  play: '<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>',
+  check: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  download: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>',
+};
+
 function initGallery() {
   const grid = document.getElementById('galleryGrid');
   if (!grid) return;
+  initMasonry(grid);
   if (grid.dataset.assign) return initGalleryAssign(grid); // bulk-assign mode
   const input = document.getElementById('galleryInput');
   const btn = document.getElementById('galleryUploadBtn');
@@ -2740,13 +2827,29 @@ function initGallery() {
     el.className = 'gallery-tile';
     el.dataset.id = img.id;
     const isVideo = (img.mime || '').startsWith('video/');
-    el.innerHTML =
-      '<span class="tile-check" aria-hidden="true">✓</span>' +
-      '<button type="button" class="gallery-fav" aria-label="Favourite">♡</button>' +
-      (isVideo
-        ? `<video muted preload="metadata" data-full="${img.url}"></video><div class="media-play">▶</div>`
-        : `<img src="${img.url}?w=640" data-full="${img.url}" alt="" loading="lazy">`) +
-      (img.file_name ? `<div class="tile-name" title="${escapeHtml(img.file_name)}">${escapeHtml(img.file_name)}</div>` : '');
+    if (grid.classList.contains('g-masonry')) {
+      const name = img.file_name ? escapeHtml(img.file_name) : '';
+      el.innerHTML =
+        '<div class="g-media">' +
+          (isVideo
+            ? `<video muted playsinline preload="none" data-full="${img.url}"></video><span class="media-play">${GALLERY_ICONS.play}Video</span>`
+            : `<img src="${img.url}?w=640" data-full="${img.url}" alt="${name}" loading="lazy">`) +
+        '</div>' +
+        `<span class="tile-check" aria-hidden="true">${GALLERY_ICONS.check}</span>` +
+        `<button type="button" class="gallery-fav" aria-label="Favourite" aria-pressed="false">${GALLERY_ICONS.heart}</button>` +
+        '<div class="g-foot">' +
+          (name ? `<span class="tile-name" title="${name}">${name}</span>` : '<span></span>') +
+          `<a class="g-dl" href="${img.url}?download=1" download aria-label="Download">${GALLERY_ICONS.download}</a>` +
+        '</div>';
+    } else {
+      el.innerHTML =
+        '<span class="tile-check" aria-hidden="true">✓</span>' +
+        '<button type="button" class="gallery-fav" aria-label="Favourite">♡</button>' +
+        (isVideo
+          ? `<video muted preload="metadata" data-full="${img.url}"></video><div class="media-play">▶</div>`
+          : `<img src="${img.url}?w=640" data-full="${img.url}" alt="" loading="lazy">`) +
+        (img.file_name ? `<div class="tile-name" title="${escapeHtml(img.file_name)}">${escapeHtml(img.file_name)}</div>` : '');
+    }
     // Newest-first view shows fresh uploads at the top; oldest-first at the bottom.
     grid.insertAdjacentElement(newestFirst ? 'afterbegin' : 'beforeend', el);
     // Keep new video tiles memory-bounded like the initial ones.
@@ -2935,7 +3038,10 @@ function initGallery() {
       const res = await fetch('/gallery/' + tile.dataset.id + '/favourite', { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
       const data = await res.json();
       fav.classList.toggle('faved', data.favourite);
-      fav.textContent = data.favourite ? '♥' : '♡';
+      fav.setAttribute('aria-pressed', data.favourite ? 'true' : 'false');
+      // The redesigned tile draws its heart as an SVG (filled via .faved);
+      // older tiles still use a text glyph.
+      if (!fav.querySelector('svg')) fav.textContent = data.favourite ? '♥' : '♡';
       // In the Favourites tab, un-favouriting drops the tile from view.
       if (grid.dataset.fav && !data.favourite) {
         tile.remove();

@@ -35,7 +35,7 @@ router.use(ensureAuth);
 // Gallery page. ?collection=<id> filters to one collection ("All" otherwise).
 // ?assign=1 (with a collection) enters bulk-assign mode: show ALL images so the
 // user can multi-select which ones belong to the collection.
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   // Sort modes: newest (default), oldest, or fav (favourites first, then newest).
   const order = ['oldest', 'fav'].includes(req.query.order) ? req.query.order : 'newest';
   const baseOrder = order === 'oldest' ? 'oldest' : 'newest';
@@ -60,13 +60,30 @@ router.get('/', (req, res) => {
   const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
   const pageImages = assignMode ? images : images.slice((page - 1) * perPage, page * perPage);
 
+  // Learn each tile's aspect ratio from its cached 640px thumbnail (a header
+  // read) the first time it's shown, so the masonry grid can lay tiles out
+  // before the images arrive. Tiles still without one get sized on load.
+  await Promise.all(pageImages.filter((im) => !im.width && im.telegram_file_id).map(async (im) => {
+    const isVideo = (im.mime || '').startsWith('video/');
+    const size = await storage.thumbSize(im.telegram_file_id, 640, isVideo ? 'video' : 'photo').catch(() => null);
+    if (size) { Gallery.setSize(im.id, size.width, size.height); im.width = size.width; im.height = size.height; }
+  }));
+
+  // Cover mosaics for the collection cards (3 newest photos each).
+  const collections = Collections.listForUser(req.user.id);
+  const covers = { all: Gallery.coverPhotos(req.user.id, null), fav: Gallery.coverPhotos(req.user.id, 'fav') };
+  collections.forEach((c) => { covers[c.id] = Gallery.coverPhotos(req.user.id, c.id); });
+
   res.render('gallery', {
     images: pageImages,
+    covers,
+    allCount: Gallery.countForUser(req.user.id),
+    themeable: true,
     page,
     totalPages,
     total,
     order,
-    collections: Collections.listForUser(req.user.id),
+    collections,
     activeCollection,
     collectionCounts: Gallery.countsByCollection(req.user.id),
     favMode,
