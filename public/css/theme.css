@@ -78,6 +78,9 @@
 }
 .g-pill:hover { background: var(--m-surf-2); }
 .g-pill[aria-current] { background: var(--m-ink); color: var(--m-bg); }
+.g-types { display: flex; flex-wrap: wrap; gap: 8px; margin: -8px 0 22px; }
+.g-types .g-pill { text-decoration: none; }
+.g-type-n { opacity: .6; font-variant-numeric: tabular-nums; }
 .g-pill-quiet { background: transparent; color: var(--m-mute); }
 .g-pill-quiet:hover { background: var(--m-danger-soft); color: var(--m-danger); }
 .g-pill-primary { background: var(--m-acc); color: var(--m-acc-ink); font-weight: 600; }

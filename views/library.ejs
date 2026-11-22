@@ -97,6 +97,13 @@
           </div>
         </div>
 
+        <nav class="g-types" aria-label="Show">
+          <% [['all','All'],['stories','Stories'],['photos','Photos'],['videos','Videos']].forEach(function(t){
+               var n = t[0] === 'all' ? storyTotal + photoTotal : t[0] === 'stories' ? storyTotal : t[0] === 'videos' ? videoTotal : photoTotal - videoTotal; %>
+            <a class="g-pill" href="/library?<%= folderQ %>type=<%= t[0] %><%= query ? ('&q=' + encodeURIComponent(query)) : '' %>" <%- type === t[0] ? 'aria-current="true"' : '' %>><%= t[1] %> <span class="g-type-n"><%= n.toLocaleString('en-US') %></span></a>
+          <% }) %>
+        </nav>
+
         <div class="g-selbar" id="librarySelectBar" hidden>
           <span class="g-selcount" id="librarySelectCount">0 selected</span>
           <div class="g-selactions">
@@ -160,7 +167,7 @@
 
         <% if (!items.length) { %>
           <div class="empty g-empty">
-            <div class="et"><%= query ? 'No matching stories' : (activeFolder ? ('Nothing in “' + activeFolder.name + '” yet') : 'Your library is empty') %></div>
+            <div class="et"><%= query ? 'No matching stories' : (type !== 'all' && storyTotal + photoTotal ? ('No ' + type + ' here') : (activeFolder ? ('Nothing in “' + activeFolder.name + '” yet') : 'Your library is empty')) %></div>
             <div class="eh"><%= query ? 'Try a different search.' : 'Use Add to upload photos and videos, upload a whole folder, or write a new story.' %></div>
           </div>
         <% } %>

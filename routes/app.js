@@ -111,6 +111,7 @@ router.get('/dashboard', (req, res) => {
 // mix of them; "All" shows everything. Replaces the old separate Folders and
 // Gallery pages (both now redirect here).
 const LIBRARY_SORTS = ['latest', 'oldest', 'favourites', 'az', 'za'];
+const LIBRARY_TYPES = ['all', 'stories', 'photos', 'videos'];
 
 router.get('/library', (req, res, next) => libraryPage(req, res).catch(next));
 async function libraryPage(req, res) {
@@ -132,14 +133,27 @@ async function libraryPage(req, res) {
   else sort = req.session.librarySort;
   if (!LIBRARY_SORTS.includes(sort)) sort = 'latest';
 
+  // Type filter (All / Stories / Photos / Videos), remembered like the sort.
+  let type = req.query.type;
+  if (type && LIBRARY_TYPES.includes(type)) req.session.libraryType = type;
+  else type = req.session.libraryType;
+  if (!LIBRARY_TYPES.includes(type)) type = 'all';
+
   const stories = filt(active ? books.filter((b) => b.folder_id === active.id) : books, q);
   // Search filters stories by title/author; photos have no text, so they hide.
   const images = q ? [] : (active ? allImages.filter((i) => i.folder_id === active.id) : allImages);
 
+  const isVid = (i) => String(i.mime || '').startsWith('video/');
+  const videoTotal = images.filter(isVid).length;
+  const shownStories = (type === 'all' || type === 'stories') ? stories : [];
+  const shownImages = type === 'all' ? images
+    : type === 'photos' ? images.filter((i) => !isVid(i))
+    : type === 'videos' ? images.filter(isVid) : [];
+
   const favSet = new Set(Favourites.idsForUser(u.id));
   const items = [
-    ...stories.map((b) => ({ type: 'story', book: b, date: b.created_at || '', title: b.title || '', faved: favSet.has(b.id) })),
-    ...images.map((i) => ({ type: 'photo', img: i, date: i.created_at || '', title: i.file_name || '', faved: !!i.is_favourite })),
+    ...shownStories.map((b) => ({ type: 'story', book: b, date: b.created_at || '', title: b.title || '', faved: favSet.has(b.id) })),
+    ...shownImages.map((i) => ({ type: 'photo', img: i, date: i.created_at || '', title: i.file_name || '', faved: !!i.is_favourite })),
   ];
   const byDateDesc = (a, b) => String(b.date).localeCompare(String(a.date));
   const byName = (a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
@@ -204,6 +218,8 @@ async function libraryPage(req, res) {
     items: pageItems,
     storyTotal: stories.length,
     photoTotal: images.length,
+    videoTotal,
+    type,
     page,
     totalPages,
     query: q,
