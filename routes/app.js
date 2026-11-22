@@ -266,7 +266,8 @@ async function libraryPage(req, res) {
     const cells = [];
     for (const p of photoRows) {
       if (cells.length >= 3) break;
-      if (ready(p.k)) cells.push({ src: '/gallery/' + p.id + '/raw?w=640' });
+      const ok = p.is_video ? storage.hasThumbs(p.k, 'video', [640]) : ready(p.k);
+      if (ok) cells.push({ src: '/gallery/' + p.id + '/raw?w=640' });
     }
     for (const b of storyList) {
       if (cells.length >= 3) break;
@@ -275,7 +276,13 @@ async function libraryPage(req, res) {
       const ok = m && (m.kind === 'video' ? storage.hasThumbs(m.telegram_file_id, 'video', [640]) : ready(m.telegram_file_id));
       if (ok) cells.push({ src: '/media/' + cid + '?w=640' });
     }
-    if (!cells.length) cells.push({ bg: themeGradient(theme || 'terra') });
+    if (!cells.length) {
+      // Nothing ready yet: make the newest item's thumbnail in the background
+      // (deduped, one at a time) so the cover appears on a later visit.
+      const p = photoRows[0];
+      if (p) storage.queueWarm(p.k, p.is_video ? 'video' : 'photo', p.is_video ? {} : { widths: [640] });
+      cells.push({ bg: themeGradient(theme || 'terra') });
+    }
     return cells;
   };
   // Dates come from the folder's contents as well as the folder row: folders
