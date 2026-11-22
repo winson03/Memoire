@@ -179,6 +179,8 @@ router.get('/editor', (req, res) => {
       blurb: '',
       type,
     });
+    // Cover follows the story's first photo (or video frame) until changed.
+    Books.setCoverMode(book.id, 'first');
     return res.redirect('/editor?id=' + book.id);
   }
 
