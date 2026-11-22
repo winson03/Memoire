@@ -301,3 +301,15 @@
 #folderGrid[data-sortable] .g-fcard { cursor: grab; }
 .g-fcard.dragging { opacity: .45; }
 .g-coll-star { color: #E0A21B; }
+
+/* Folder label on tiles in the "All" view */
+.g-masonry .g-folderpill {
+  position: absolute; left: 12px; top: 12px; z-index: 3; max-width: calc(100% - 70px);
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px;
+  background: rgba(255,252,247,.92); color: var(--m-ink); font-size: 12px; font-weight: 600; text-decoration: none;
+  box-shadow: 0 1px 6px rgba(0,0,0,.18);
+}
+.g-masonry .g-folderpill.low { top: 46px; }
+.g-masonry .g-folderpill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-masonry .g-folderpill:hover { background: #fff; color: var(--m-acc); }
+.g-masonry.select-mode .g-folderpill { display: none; }

@@ -31,6 +31,13 @@
             if (p) parts.push(p.toLocaleString('en-US') + ' ' + (p === 1 ? 'photo' : 'photos'));
             return parts.length ? parts.join(' · ') : 'Empty';
           };
+          var folderSvg = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg>';
+          // In "All", each tile says which folder it lives in (click → folder).
+          var folderPill = function (fid, low) {
+            if (activeFolder || !fid || !folderNames[fid]) return '';
+            var n = String(folderNames[fid]).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+            return '<a class="g-folderpill' + (low ? ' low' : '') + '" href="/library?folder=' + fid + '" title="In folder: ' + n + '">' + folderSvg + '<span>' + n + '</span></a>';
+          };
           var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
           // SQLite UTC 'YYYY-MM-DD HH:MM:SS' → '12 Mar 2026'
           var fmtDate = function (t) {
@@ -146,6 +153,7 @@
                   </span>
                 </a>
                 <span class="media-play g-story-badge"><%- bookSvg %><%= b.status === 'published' ? 'Story' : 'Private story' %></span>
+                <%- folderPill(b.folder_id, true) %>
                 <span class="tile-check" aria-hidden="true"><%- checkSvg %></span>
                 <button type="button" class="gallery-fav g-story-fav <%= faved ? 'faved' : '' %>" data-story-fav="<%= b.id %>" aria-label="Favourite" aria-pressed="<%= faved ? 'true' : 'false' %>"><%- heartSvg %></button>
               </div>
@@ -159,6 +167,7 @@
                     <img src="/gallery/<%= img.id %>/raw?w=640" data-full="/gallery/<%= img.id %>/raw" alt="<%= img.file_name || '' %>" loading="lazy">
                   <% } %>
                 </div>
+                <%- folderPill(img.folder_id, isVideo) %>
                 <span class="tile-check" aria-hidden="true"><%- checkSvg %></span>
                 <button type="button" class="gallery-fav <%= img.is_favourite ? 'faved' : '' %>" aria-label="Favourite" aria-pressed="<%= img.is_favourite ? 'true' : 'false' %>"><%- heartSvg %></button>
                 <div class="g-foot">

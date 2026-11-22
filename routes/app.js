@@ -326,6 +326,8 @@ async function libraryPage(req, res) {
     : [];
 
   res.render('library', {
+    // Folder of each item, labelled on tiles in the "All" view.
+    folderNames: Object.fromEntries(folders.map((f) => [f.id, f.name])),
     view,
     fsort,
     allFolders,
