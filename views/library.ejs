@@ -152,8 +152,8 @@
                     <% if (b.author) { %><span class="g-story-author"><%= b.author %></span><% } %>
                   </span>
                 </a>
-                <span class="media-play g-story-badge"><%- bookSvg %><%= b.status === 'published' ? 'Story' : 'Private story' %></span>
-                <%- folderPill(b.folder_id, true) %>
+                <% if (b.status === 'published') { %><span class="media-play g-story-badge"><%- bookSvg %>Published</span><% } %>
+                <%- folderPill(b.folder_id, b.status === 'published') %>
                 <span class="tile-check" aria-hidden="true"><%- checkSvg %></span>
                 <button type="button" class="gallery-fav g-story-fav <%= faved ? 'faved' : '' %>" data-story-fav="<%= b.id %>" aria-label="Favourite" aria-pressed="<%= faved ? 'true' : 'false' %>"><%- heartSvg %></button>
               </div>

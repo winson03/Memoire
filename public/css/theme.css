@@ -305,11 +305,12 @@
 /* Folder label on tiles in the "All" view */
 .g-masonry .g-folderpill {
   position: absolute; left: 12px; top: 12px; z-index: 3; max-width: calc(100% - 70px);
-  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px;
-  background: rgba(255,252,247,.92); color: var(--m-ink); font-size: 12px; font-weight: 600; text-decoration: none;
-  box-shadow: 0 1px 6px rgba(0,0,0,.18);
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px;
+  background: rgba(0,0,0,.38); color: rgba(255,255,255,.92); font-size: 11.5px; font-weight: 500; text-decoration: none;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
 }
+.g-masonry .g-folderpill svg { opacity: .8; }
 .g-masonry .g-folderpill.low { top: 46px; }
 .g-masonry .g-folderpill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.g-masonry .g-folderpill:hover { background: #fff; color: var(--m-acc); }
+.g-masonry .g-folderpill:hover { background: rgba(0,0,0,.6); color: #fff; }
 .g-masonry.select-mode .g-folderpill { display: none; }
