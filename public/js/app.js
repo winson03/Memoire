@@ -806,11 +806,7 @@ document.addEventListener('DOMContentLoaded', () => {
       searchInput.value = '';
       searchInput.value = v; // move caret to end
     }
-    let timer;
-    searchInput.addEventListener('input', () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => { showPageLoader(); searchForm.submit(); }, 350);
-    });
+    initGlobalSearch(searchForm, searchInput);
   }
 
   // Mobile sidebar drawer — dimmed overlay + auto-close on nav / outside / Esc.
@@ -3251,4 +3247,92 @@ function initGalleryAssign(grid) {
       saveBtn.disabled = false;
     }
   });
+}
+
+
+// ── Global search dropdown ──────────────────────────────────────────────────
+// Typing in the header search shows matches from every part of the site
+// (pages, folders, stories, photos/videos, Discover, storytellers, admin
+// users) with the matched text highlighted. Arrow keys + Enter pick a result;
+// Enter with nothing picked still searches the current page as before.
+function initGlobalSearch(form, input) {
+  const box = document.createElement('div');
+  box.className = 'gsearch';
+  box.id = 'globalSearchResults';
+  box.setAttribute('role', 'listbox');
+  box.hidden = true;
+  form.appendChild(box);
+  input.setAttribute('aria-controls', box.id);
+  input.setAttribute('aria-autocomplete', 'list');
+  input.placeholder = 'Search everything…';
+
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const mark = (text, q) => {
+    const src = String(text == null ? '' : text);
+    if (!q) return esc(src);
+    const lower = src.toLowerCase(); const n = q.toLowerCase();
+    let out = ''; let i = 0; let hit;
+    while ((hit = lower.indexOf(n, i)) !== -1) {
+      out += esc(src.slice(i, hit)) + '<mark>' + esc(src.slice(hit, hit + n.length)) + '</mark>';
+      i = hit + n.length;
+    }
+    return out + esc(src.slice(i));
+  };
+
+  let timer = null; let seq = 0; let active = -1; let links = [];
+  const close = () => { box.hidden = true; active = -1; input.setAttribute('aria-expanded', 'false'); };
+  const open = () => { box.hidden = false; input.setAttribute('aria-expanded', 'true'); };
+  const setActive = (i) => {
+    links.forEach((a) => a.classList.remove('active'));
+    active = links.length ? (i + links.length) % links.length : -1;
+    if (active >= 0) { links[active].classList.add('active'); links[active].scrollIntoView({ block: 'nearest' }); }
+  };
+
+  const render = (data) => {
+    const q = data.q;
+    if (!data.groups.length) {
+      box.innerHTML = '<div class="gsearch-empty">No results for “' + esc(q) + '”</div>';
+    } else {
+      box.innerHTML = data.groups.map((g) => (
+        '<div class="gsearch-group"><div class="gsearch-label">' + esc(g.label) +
+        (g.total > g.items.length ? ' <span>' + g.total.toLocaleString('en-US') + '</span>' : '') + '</div>' +
+        g.items.map((it) => (
+          '<a class="gsearch-item" role="option" href="' + esc(it.url) + '">' +
+            (it.thumb ? '<span class="gsearch-thumb' + (it.video ? ' is-video' : '') + '"><img src="' + esc(it.thumb) + '" alt="" loading="lazy"></span>'
+                      : '<span class="gsearch-thumb gsearch-ic">' + esc((g.label || '?').charAt(0)) + '</span>') +
+            '<span class="gsearch-text"><span class="gsearch-title">' + mark(it.title, q) + '</span>' +
+            (it.sub ? '<span class="gsearch-sub">' + mark(it.sub, q) + '</span>' : '') + '</span>' +
+          '</a>'
+        )).join('') + '</div>'
+      )).join('') +
+      '<button type="button" class="gsearch-page">Search this page for “' + esc(q) + '” ↵</button>';
+    }
+    box.querySelectorAll('.gsearch-thumb img').forEach((img) => img.addEventListener('error', () => img.remove(), { once: true }));
+    const pageBtn = box.querySelector('.gsearch-page');
+    if (pageBtn) pageBtn.addEventListener('click', () => { showPageLoader(); form.submit(); });
+    links = Array.from(box.querySelectorAll('.gsearch-item'));
+    active = -1;
+    open();
+  };
+
+  const run = () => {
+    const q = input.value.trim();
+    if (!q) { close(); box.innerHTML = ''; return; }
+    const mine = ++seq;
+    fetch('/search.json?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data && mine === seq && input.value.trim() === q) render(data); })
+      .catch(() => {});
+  };
+
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 180); });
+  input.addEventListener('focus', () => { if (input.value.trim() && box.innerHTML) open(); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (box.hidden) run(); else setActive(active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+    else if (e.key === 'Escape') { close(); }
+    else if (e.key === 'Enter' && !box.hidden && active >= 0) { e.preventDefault(); window.location.href = links[active].href; }
+  });
+  document.addEventListener('click', (e) => { if (!form.contains(e.target)) close(); });
+  form.addEventListener('submit', () => { showPageLoader(); });
 }

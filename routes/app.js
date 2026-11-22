@@ -106,6 +106,82 @@ router.get('/dashboard', (req, res) => {
   });
 });
 
+// ── Global search (header dropdown) ─────────────────────────────────────────
+// One query across everything the user can reach: pages, their folders,
+// stories, photos/videos, published stories by others, storytellers, and (for
+// admins) user accounts. Each group is capped; the dropdown highlights matches.
+const SEARCH_PAGES = [
+  { title: 'Dashboard', url: '/dashboard', words: 'home overview' },
+  { title: 'Your library', url: '/library', words: 'library folders gallery photos videos stories' },
+  { title: 'Favourites', url: '/favourites', words: 'favourites favorites liked hearts' },
+  { title: 'Discover', url: '/discover', words: 'discover explore published browse' },
+  { title: 'Reports', url: '/reports', words: 'reports stats analytics' },
+  { title: 'Profile', url: '/profile', words: 'profile account me' },
+  { title: 'Settings', url: '/settings', words: 'settings preferences storage' },
+  { title: 'New story', url: '/editor', words: 'new story write create' },
+  { title: 'New novel', url: '/editor?type=novel', words: 'new novel write create' },
+  { title: 'Admin overview', url: '/admin', words: 'admin overview', admin: true },
+  { title: 'Admin · Users', url: '/admin/users', words: 'admin users accounts', admin: true },
+];
+
+router.get('/search.json', (req, res) => {
+  const u = req.user;
+  const q = String(req.query.q || '').trim().slice(0, 80);
+  if (!q) return res.json({ q, groups: [] });
+  const needle = q.toLowerCase();
+  const has = (...parts) => parts.some((p) => p && String(p).toLowerCase().includes(needle));
+  const LIMIT = 6;
+  const groups = [];
+  const add = (key, label, all, map) => {
+    if (!all.length) return;
+    groups.push({ key, label, total: all.length, items: all.slice(0, LIMIT).map(map) });
+  };
+  const isAdmin = u.role === 'admin';
+
+  add('pages', 'Pages', SEARCH_PAGES.filter((p) => (!p.admin || isAdmin) && has(p.title, p.words)),
+    (p) => ({ title: p.title, url: p.url }));
+
+  const folders = Folders.listForUser(u.id);
+  const folderName = new Map(folders.map((f) => [f.id, f.name]));
+  add('folders', 'Folders', folders.filter((f) => has(f.name)),
+    (f) => ({ title: f.name, url: '/library?folder=' + f.id }));
+
+  const cover = (b) => { const id = coverImageId(b); return id ? '/media/' + id + '?w=640' : null; };
+  const mine = Books.listByUser(u.id).filter((b) => has(b.title, b.author, b.series, b.blurb))
+    .sort((a, b) => b.id - a.id);
+  add('stories', 'Your stories', mine, (b) => ({
+    title: b.title, sub: [b.author, folderName.get(b.folder_id)].filter(Boolean).join(' · '),
+    url: '/reader/' + b.id, thumb: cover(b),
+  }));
+
+  const media = Gallery.listForUser(u.id, 'newest').filter((i) => has(i.file_name, folderName.get(i.folder_id)));
+  add('media', 'Photos & videos', media, (i) => {
+    const video = String(i.mime || '').startsWith('video/');
+    return {
+      title: i.file_name || (video ? 'Video' : 'Photo'),
+      sub: [video ? 'Video' : 'Photo', folderName.get(i.folder_id)].filter(Boolean).join(' · '),
+      url: '/library' + (i.folder_id ? '?folder=' + i.folder_id : ''),
+      thumb: '/gallery/' + i.id + '/raw?w=640', video,
+    };
+  });
+
+  const others = Books.listPublished().filter((b) => b.user_id !== u.id && has(b.title, b.author, b.series, b.blurb))
+    .sort((a, b) => (b.views || 0) - (a.views || 0));
+  add('discover', 'Discover', others, (b) => ({ title: b.title, sub: b.author || '', url: '/reader/' + b.id, thumb: cover(b) }));
+
+  const allUsers = Users.listAll();
+  const publishedBy = new Set(Books.listPublished().map((b) => b.user_id));
+  add('authors', 'Storytellers', allUsers.filter((x) => publishedBy.has(x.id) && has(x.name, x.username)),
+    (x) => ({ title: x.name || x.username, sub: x.username ? '@' + x.username : '', url: '/u/' + x.id }));
+
+  if (isAdmin) {
+    add('users', 'Users (admin)', allUsers.filter((x) => has(x.name, x.username, x.email)),
+      (x) => ({ title: x.name || x.username || x.email, sub: [x.email, x.role].filter(Boolean).join(' · '), url: '/admin/users/' + x.id + '/edit' }));
+  }
+
+  res.json({ q, groups });
+});
+
 // ── Library: folders hold everything ─────────────────────────────────────────
 // One page for all of a user's stories, photos and videos. A folder holds any
 // mix of them; "All" shows everything. Replaces the old separate Folders and
