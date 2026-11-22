@@ -2538,6 +2538,29 @@ function initLibraryMosaic() {
   initMasonry(grid);
   windowMedia(Array.from(grid.querySelectorAll('video[data-full]')), () => 640);
 
+  // The folder row is a horizontal scroller and each folder is a full page
+  // load — remember where it was scrolled so clicking a folder doesn't jump
+  // back to the start, and always keep the open folder in view.
+  const colls = document.querySelector('.g-colls');
+  if (colls) {
+    const KEY = 'libraryFolderScroll';
+    try {
+      const saved = parseInt(sessionStorage.getItem(KEY) || '', 10);
+      if (!isNaN(saved)) colls.scrollLeft = saved;
+    } catch (_) { /* storage unavailable */ }
+    const active = colls.querySelector('[aria-current="page"]');
+    if (active) {
+      const l = active.offsetLeft - colls.offsetLeft;
+      const r = l + active.offsetWidth;
+      if (l < colls.scrollLeft || r > colls.scrollLeft + colls.clientWidth) {
+        colls.scrollLeft = Math.max(0, l - (colls.clientWidth - active.offsetWidth) / 2);
+      }
+    }
+    const save = () => { try { sessionStorage.setItem(KEY, String(colls.scrollLeft)); } catch (_) { /* ignore */ } };
+    colls.addEventListener('click', save);
+    colls.addEventListener('scroll', () => { clearTimeout(colls._st); colls._st = setTimeout(save, 150); }, { passive: true });
+  }
+
   // "+ Add" menu
   const addBtn = document.getElementById('libraryAddBtn');
   const addMenu = document.getElementById('libraryAddMenu');
