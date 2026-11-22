@@ -35,7 +35,8 @@ router.use(ensureAuth);
 // Gallery page. ?collection=<id> filters to one collection ("All" otherwise).
 // ?assign=1 (with a collection) enters bulk-assign mode: show ALL images so the
 // user can multi-select which ones belong to the collection.
-router.get('/', async (req, res) => {
+router.get('/', (req, res, next) => galleryPage(req, res).catch(next));
+async function galleryPage(req, res) {
   // Sort modes: newest (default), oldest, or fav (favourites first, then newest).
   const order = ['oldest', 'fav'].includes(req.query.order) ? req.query.order : 'newest';
   const baseOrder = order === 'oldest' ? 'oldest' : 'newest';
@@ -63,11 +64,16 @@ router.get('/', async (req, res) => {
   // Learn each tile's aspect ratio from its cached 640px thumbnail (a header
   // read) the first time it's shown, so the masonry grid can lay tiles out
   // before the images arrive. Tiles still without one get sized on load.
-  await Promise.all(pageImages.filter((im) => !im.width && im.telegram_file_id).map(async (im) => {
-    const isVideo = (im.mime || '').startsWith('video/');
-    const size = await storage.thumbSize(im.telegram_file_id, 640, isVideo ? 'video' : 'photo').catch(() => null);
-    if (size) { Gallery.setSize(im.id, size.width, size.height); im.width = size.width; im.height = size.height; }
-  }));
+  // Best-effort: a failure here must never take the page (or the server) down.
+  try {
+    await Promise.all(pageImages.filter((im) => !im.width && im.telegram_file_id).map(async (im) => {
+      const isVideo = (im.mime || '').startsWith('video/');
+      const size = await storage.thumbSize(im.telegram_file_id, 640, isVideo ? 'video' : 'photo').catch(() => null);
+      if (size) { Gallery.setSize(im.id, size.width, size.height); im.width = size.width; im.height = size.height; }
+    }));
+  } catch (err) {
+    console.warn('[gallery] aspect-ratio lookup failed:', err.message);
+  }
 
   // Cover mosaics for the collection cards (3 newest photos each).
   const collections = Collections.listForUser(req.user.id);
@@ -90,7 +96,7 @@ router.get('/', async (req, res) => {
     favCount: Gallery.favouriteCount(req.user.id),
     assignMode,
   });
-});
+}
 
 // Toggle an image's favourite flag (owner only). AJAX from the tile heart.
 router.post('/:id/favourite', (req, res) => {
