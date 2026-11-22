@@ -165,14 +165,25 @@ async function libraryPage(req, res) {
   const photoCounts = Gallery.countsByFolder(u.id);
   const storyCounts = {};
   books.forEach((b) => { if (b.folder_id) storyCounts[b.folder_id] = (storyCounts[b.folder_id] || 0) + 1; });
-  const coverFor = (photoRows, storyList) => {
-    const cells = photoRows.map((p) => ({ src: '/gallery/' + p.id + '/raw?w=640' }));
+  // Covers only use thumbnails that ALREADY exist on disk (a cheap stat), so a
+  // page full of folder cards never makes the server generate anything — a
+  // burst of cover generation is what overloaded the 512 MB instance. A folder
+  // with nothing ready yet shows its colour until thumbnails exist.
+  const ready = (key) => !!key && storage.hasThumbs(key, 'photo', [640]);
+  const coverFor = (photoRows, storyList, theme) => {
+    const cells = [];
+    for (const p of photoRows) {
+      if (cells.length >= 3) break;
+      if (ready(p.k)) cells.push({ src: '/gallery/' + p.id + '/raw?w=640' });
+    }
     for (const b of storyList) {
       if (cells.length >= 3) break;
       const cid = coverImageId(b);
-      cells.push(cid ? { src: '/media/' + cid + '?w=640' } : { bg: themeGradient(b.theme) });
+      const m = cid ? Media.findById(cid) : null;
+      if (m && ready(m.telegram_file_id)) cells.push({ src: '/media/' + cid + '?w=640' });
     }
-    return cells.slice(0, 3);
+    if (!cells.length) cells.push({ bg: themeGradient(theme || 'terra') });
+    return cells;
   };
   const newestFirst = (list) => list.slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
   const folderCards = folders.map((f) => ({
@@ -181,9 +192,9 @@ async function libraryPage(req, res) {
     stories: storyCounts[f.id] || 0,
     photos: photoCounts[f.id] || 0,
     active: !!active && active.id === f.id,
-    cover: coverFor(Gallery.coverPhotos(u.id, { folder: f.id }), newestFirst(books.filter((b) => b.folder_id === f.id)).slice(0, 3)),
+    cover: coverFor(Gallery.recentPhotoKeys(u.id, f.id), newestFirst(books.filter((b) => b.folder_id === f.id)).slice(0, 6), f.theme),
   }));
-  const allCover = coverFor(Gallery.coverPhotos(u.id, null), newestFirst(books).slice(0, 3));
+  const allCover = coverFor(Gallery.recentPhotoKeys(u.id, null), newestFirst(books).slice(0, 6), 'terra');
 
   res.render('library', {
     folderCards,
