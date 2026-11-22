@@ -194,7 +194,8 @@ async function libraryPage(req, res) {
       if (cells.length >= 3) break;
       const cid = coverImageId(b);
       const m = cid ? Media.findById(cid) : null;
-      if (m && ready(m.telegram_file_id)) cells.push({ src: '/media/' + cid + '?w=640' });
+      const ok = m && (m.kind === 'video' ? storage.hasThumbs(m.telegram_file_id, 'video', [640]) : ready(m.telegram_file_id));
+      if (ok) cells.push({ src: '/media/' + cid + '?w=640' });
     }
     if (!cells.length) cells.push({ bg: themeGradient(theme || 'terra') });
     return cells;

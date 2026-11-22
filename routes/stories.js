@@ -636,7 +636,8 @@ router.get('/media/:id', async (req, res) => {
     try {
       return await storage.streamThumb(media.telegram_file_id, w, res, { kind: 'video' });
     } catch (err) {
-      if (!res.headersSent) res.status(404).send('No poster');
+      storage.queueWarm(media.telegram_file_id, 'video'); // make one in the background
+      if (!res.headersSent) res.set('Cache-Control', 'no-store').status(404).send('No poster');
       return;
     }
   }
