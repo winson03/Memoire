@@ -14,14 +14,16 @@
           var dlSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>';
           var bookSvg = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/></svg>';
           var coverCells = function (cells) {
-            var out = '';
-            for (var i = 0; i < 3; i++) {
-              var c = cells[i];
-              if (!c) out += '<span class="g-cv-empty"></span>';
-              else if (c.src) out += '<img src="' + c.src + '" alt="" loading="lazy">';
+            // Only real cells are drawn; the grid shape follows how many there
+            // are (1 = full cover, 2 = halves, 3 = big + two small).
+            var list = (cells || []).filter(Boolean).slice(0, 3);
+            var out = '<span class="g-cv g-cv-' + Math.max(1, list.length) + '">';
+            if (!list.length) out += '<span class="g-cv-empty"></span>';
+            list.forEach(function (c) {
+              if (c.src) out += '<img src="' + c.src + '" alt="" loading="lazy">';
               else out += '<span style="background:' + c.bg + '"></span>';
-            }
-            return out;
+            });
+            return out + '</span>';
           };
           var countLine = function (s, p) {
             var parts = [];
@@ -33,13 +35,13 @@
 
         <section class="g-colls" aria-label="Folders">
           <a class="g-coll" href="/library" <%- !activeFolder ? 'aria-current="page"' : '' %>>
-            <span class="g-cv"><%- coverCells(allCover) %></span>
+            <%- coverCells(allCover) %>
             <span class="g-coll-name">All</span>
             <span class="g-coll-count"><%= allCount.toLocaleString('en-US') %> items</span>
           </a>
           <% folderCards.forEach(function(f){ %>
             <a class="g-coll" href="/library?folder=<%= f.id %>" <%- f.active ? 'aria-current="page"' : '' %>>
-              <span class="g-cv"><%- coverCells(f.cover) %></span>
+              <%- coverCells(f.cover) %>
               <span class="g-coll-name"><%= f.name %></span>
               <span class="g-coll-count"><%= countLine(f.stories, f.photos) %></span>
             </a>
