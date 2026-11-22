@@ -4,71 +4,88 @@
   <main class="main">
     <%- include('partials/topbar', { pageTitle: 'Favourites', searchAction: '/favourites' }) %>
     <div class="content">
-      <div class="page">
+      <div class="page gallery-page favourites-page">
+        <%
+          var folderQ = activeFolder ? ('folder=' + activeFolder.id + '&') : '';
+          var heading = activeFolder ? activeFolder.name : 'All favourites';
+          var coverCells = function (cells) {
+            var list = (cells || []).filter(Boolean).slice(0, 3);
+            var out = '<span class="g-cv g-cv-' + Math.max(1, list.length) + '">';
+            if (!list.length) out += '<span class="g-cv-empty"></span>';
+            list.forEach(function (c) {
+              if (c.src) out += '<img src="' + c.src + '" alt="" loading="lazy">';
+              else out += '<span style="background:' + c.bg + '"></span>';
+            });
+            return out + '</span>';
+          };
+          var countLine = function (s, p) {
+            var parts = [];
+            if (s) parts.push(s + ' ' + (s === 1 ? 'story' : 'stories'));
+            if (p) parts.push(p.toLocaleString('en-US') + ' ' + (p === 1 ? 'photo' : 'photos'));
+            return parts.length ? parts.join(' · ') : 'Empty';
+          };
+        %>
 
-        <!-- Tabs: All + one per folder / collection that holds a favourite. -->
-        <% if (tabs.length) { %>
-          <div class="gallery-tabs">
-            <div class="sort-toggle">
-              <a href="/favourites" class="<%= allActive ? 'active' : '' %>">All<span class="tab-count"><%= allCount %></span></a>
-              <% tabs.forEach(function(t){ %>
-                <a href="<%= t.href %>" class="<%= t.active ? 'active' : '' %>"><%= t.name %><span class="tab-count"><%= t.count %></span></a>
-              <% }) %>
-            </div>
+        <% if (folderCards.length) { %>
+          <div class="g-collhead">
+            <span class="g-collhead-title">Folders <span class="g-count"><%= folderCards.length %></span></span>
           </div>
-        <% } %>
-
-        <p class="muted-line">
-          <% if (query) { %>
-            <%= storyTotal %> <%= storyTotal === 1 ? 'story' : 'stories' %> matching “<%= query %>”<%= activeTab ? (' in “' + activeTab.name + '”') : '' %>.
-          <% } else { %>
-            <%= storyTotal %> <%= storyTotal === 1 ? 'story' : 'stories' %><% if (photoTotal) { %> · <%= photoTotal %> <%= photoTotal === 1 ? 'photo' : 'photos' %><% } %><%= activeTab ? (' in “' + activeTab.name + '”') : '' %> saved to return to.
-          <% } %>
-        </p>
-
-        <% if (!items.length) { %>
-          <div class="empty">
-            <div class="ico">♡</div>
-            <div class="et">No favourites <%= activeTab ? ('in “' + activeTab.name + '”') : 'yet' %></div>
-            <div class="eh">Tap the heart on any story or gallery image to keep it here.</div>
-          </div>
-        <% } else { %>
-          <!-- Stories and photos combined in one grid, newest first. -->
-          <div class="cover-grid" id="favouritesCombined">
-            <% items.forEach(function(it){ %>
-              <% if (it.type === 'story') { %>
-                <%- include('partials/cover-card', { book: it.book, opts: { showFav: true, foot: 'meta', lazyCover: true } }) %>
-              <% } else { %>
-                <div class="gallery-tile lib-photo" data-id="<%= it.img.id %>">
-                  <button type="button" class="gallery-fav faved" aria-label="Remove favourite">♥</button>
-                  <% if ((it.img.mime || '').startsWith('video/')) { %>
-                    <video muted preload="metadata" data-full="/gallery/<%= it.img.id %>/raw"></video>
-                    <div class="media-play">▶</div>
-                  <% } else { %>
-                    <img data-full="/gallery/<%= it.img.id %>/raw" alt="" loading="lazy">
-                  <% } %>
-                  <% if (it.img.file_name) { %><div class="tile-name" title="<%= it.img.file_name %>"><%= it.img.file_name %></div><% } %>
-                </div>
-              <% } %>
+          <section class="g-colls" aria-label="Folders with favourites" data-scroll-key="favouritesFolderScroll">
+            <a class="g-coll" href="/favourites" <%- !activeFolder ? 'aria-current="page"' : '' %>>
+              <%- coverCells(allCover) %>
+              <span class="g-coll-name">All</span>
+              <span class="g-coll-count"><%= allCount.toLocaleString('en-US') %> <%= allCount === 1 ? 'favourite' : 'favourites' %></span>
+            </a>
+            <% folderCards.forEach(function(f){ %>
+              <a class="g-coll" href="/favourites?folder=<%= f.id %>" <%- f.active ? 'aria-current="page"' : '' %>>
+                <%- coverCells(f.cover) %>
+                <span class="g-coll-name"><% if (f.fav) { %><span class="g-coll-star" aria-label="Favourite folder">★</span> <% } %><%= f.name %></span>
+                <span class="g-coll-count"><%= countLine(f.stories, f.photos) %></span>
+              </a>
             <% }) %>
-          </div>
-          <div class="empty" id="favEmpty" hidden>
-            <div class="ico">♡</div>
-            <div class="et">No favourites yet</div>
-            <div class="eh">Tap the heart on any story or gallery image to keep it here.</div>
-          </div>
-
-          <% if (totalPages > 1) { %>
-            <%
-              var favBase = '/favourites?'
-                + (activeTab ? ('tab=' + encodeURIComponent(activeTab.name) + '&') : '')
-                + (query ? ('q=' + encodeURIComponent(query) + '&') : '');
-              var qs = function(p){ return favBase + 'page=' + p; };
-            %>
-            <%- include('partials/pager', { page: page, totalPages: totalPages, qs: qs }) %>
-            <div class="pager-info">Page <%= page %> of <%= totalPages %></div>
-          <% } %>
+          </section>
         <% } %>
+
+        <div class="g-head">
+          <div>
+            <h2 class="g-title"><%= heading %> <span class="g-count"><%= query ? ('matching “' + query + '” · ') : '' %><%= countLine(storyTotal, photoTotal) %></span></h2>
+          </div>
+          <div class="g-tools">
+            <label class="g-sortsel">
+              <span class="sr-only">Sort</span>
+              <select id="librarySortSelect" aria-label="Sort">
+                <option value="latest" <%= sort === 'latest' || sort === 'favourites' ? 'selected' : '' %>>Newest</option>
+                <option value="oldest" <%= sort === 'oldest' ? 'selected' : '' %>>Oldest</option>
+                <option value="az" <%= sort === 'az' ? 'selected' : '' %>>A–Z</option>
+                <option value="za" <%= sort === 'za' ? 'selected' : '' %>>Z–A</option>
+              </select>
+            </label>
+            <% if (activeFolder) { %><a class="g-pill" href="/library?folder=<%= activeFolder.id %>">Open folder</a><% } %>
+          </div>
+        </div>
+
+        <nav class="g-types" aria-label="Show">
+          <% [['all','All'],['stories','Stories'],['photos','Photos'],['videos','Videos']].forEach(function(t){
+               var n = t[0] === 'all' ? storyTotal + photoTotal : t[0] === 'stories' ? storyTotal : t[0] === 'videos' ? videoTotal : photoTotal - videoTotal; %>
+            <a class="g-pill" href="/favourites?<%= folderQ %>type=<%= t[0] %><%= query ? ('&q=' + encodeURIComponent(query)) : '' %>" <%- type === t[0] ? 'aria-current="true"' : '' %>><%= t[1] %> <span class="g-type-n"><%= n.toLocaleString('en-US') %></span></a>
+          <% }) %>
+        </nav>
+
+        <div class="gallery-grid g-masonry" id="favouritesGrid">
+          <%- include('partials/mosaic-tiles', { items: items, favIds: favIds, folderNames: folderNames, showFolders: !activeFolder }) %>
+        </div>
+
+        <% if (totalPages > 1) { %>
+          <% var base = '/favourites?' + folderQ + (query ? ('q=' + encodeURIComponent(query) + '&') : ''); %>
+          <% var qs = function(p){ return base + 'page=' + p; }; %>
+          <%- include('partials/pager', { page: page, totalPages: totalPages, qs: qs }) %>
+          <div class="pager-info">Page <%= page %> of <%= totalPages %></div>
+        <% } %>
+
+        <div class="empty g-empty" id="favEmpty" <%- items.length ? 'hidden' : '' %>>
+          <div class="et"><%= query ? 'No matching favourites' : (type !== 'all' && storyTotal + photoTotal ? ('No favourite ' + type + ' here') : (activeFolder ? ('No favourites in “' + activeFolder.name + '”') : 'No favourites yet')) %></div>
+          <div class="eh"><%= query ? 'Try a different search.' : 'Tap the heart on any story, photo or video to keep it here.' %></div>
+        </div>
 
       </div>
     </div>

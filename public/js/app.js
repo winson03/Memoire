@@ -2839,40 +2839,60 @@ function bindPhotoGrid(grid) {
 // (heart to un-favourite, click a photo to zoom; stories navigate via data-href
 // and their hearts use the global .heart-btn handler).
 function initFavouritesGallery() {
-  const grid = document.getElementById('favouritesCombined');
+  const grid = document.getElementById('favouritesGrid');
   if (!grid) return;
   const emptyEl = document.getElementById('favEmpty');
+  initMasonry(grid);
+  windowMedia(Array.from(grid.querySelectorAll('video[data-full]')), () => 640);
+
+  // Folder row: keep its scroll position across folder clicks (full reloads).
+  const colls = document.querySelector('.g-colls[data-scroll-key]');
+  if (colls) {
+    const KEY = colls.dataset.scrollKey;
+    try { const saved = parseInt(sessionStorage.getItem(KEY) || '', 10); if (!isNaN(saved)) colls.scrollLeft = saved; } catch (_) { /* ignore */ }
+    const active = colls.querySelector('[aria-current="page"]');
+    if (active) {
+      const l = active.offsetLeft - colls.offsetLeft; const r = l + active.offsetWidth;
+      if (l < colls.scrollLeft || r > colls.scrollLeft + colls.clientWidth) colls.scrollLeft = Math.max(0, l - (colls.clientWidth - active.offsetWidth) / 2);
+    }
+    const save = () => { try { sessionStorage.setItem(KEY, String(colls.scrollLeft)); } catch (_) { /* ignore */ } };
+    colls.addEventListener('click', save);
+    colls.addEventListener('scroll', () => { clearTimeout(colls._st); colls._st = setTimeout(save, 150); }, { passive: true });
+  }
+
   const showEmptyIfBare = () => {
-    if (grid.querySelector('.gallery-tile, .cover-card')) return;
-    // Emptying a page isn't emptying the list when more pages follow — reload
-    // so the next page's favourites move up rather than claiming there are none.
+    if (grid.querySelector('.gallery-tile')) return;
+    // Emptying a page isn't emptying the list when more pages follow.
     if (document.querySelector('.pager')) { window.location.reload(); return; }
     if (emptyEl) emptyEl.hidden = false;
   };
-  windowMedia(Array.from(grid.querySelectorAll('img[data-full], video[data-full]')), () => 640);
+
   grid.addEventListener('click', async (e) => {
-    // A photo's heart un-favourites and drops its tile from the page.
+    // Un-heart: remove the favourite and drop its tile from the page.
     const fav = e.target.closest('.gallery-fav');
     if (fav) {
       e.preventDefault(); e.stopPropagation();
       const tile = fav.closest('.gallery-tile');
+      const story = tile.dataset.kind === 'story';
       fav.disabled = true;
       try {
-        const res = await fetch('/gallery/' + tile.dataset.id + '/favourite', { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
+        const res = await fetch(story ? `/stories/${tile.dataset.id}/favourite-ajax` : `/gallery/${tile.dataset.id}/favourite`,
+          { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
         const data = await res.json();
-        if (!data.favourite) { tile.remove(); showEmptyIfBare(); }
-      } catch (_) { /* ignore */ } finally { fav.disabled = false; }
+        const on = story ? !!data.faved : !!data.favourite;
+        if (!on) { tile.remove(); showEmptyIfBare(); showToast('Removed from favourites', 'success', 1600); }
+        else { fav.classList.add('faved'); fav.setAttribute('aria-pressed', 'true'); }
+      } catch (_) { showToast('Could not update — please try again', 'error', 3000); } finally { fav.disabled = false; }
       return;
     }
-    const clicked = e.target.closest('.gallery-tile img, .gallery-tile video');
-    if (clicked) {
-      const items = [...grid.querySelectorAll('.gallery-tile img, .gallery-tile video')];
-      openLightbox(
-        items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, thumb: x.currentSrc || x.getAttribute('src') || '', caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
-        items.indexOf(clicked),
-        (end) => { if (items[end]) items[end].scrollIntoView({ block: 'center' }); }
-      );
-    }
+    const clicked = e.target.closest('.gallery-tile[data-kind="photo"] img, .gallery-tile[data-kind="photo"] video');
+    if (!clicked) return;
+    const items = [...grid.querySelectorAll('.gallery-tile[data-kind="photo"] img, .gallery-tile[data-kind="photo"] video')];
+    openLightbox(
+      items.map((x) => ({ src: x.dataset.full || x.currentSrc || x.src, thumb: x.currentSrc || x.getAttribute('src') || '', caption: '', kind: x.tagName === 'VIDEO' ? 'video' : 'photo' })),
+      items.indexOf(clicked),
+      (end) => { if (items[end]) items[end].scrollIntoView({ block: 'center' }); }
+    );
   });
 }
 

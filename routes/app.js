@@ -414,62 +414,103 @@ router.get('/folders', (req, res) => {
 });
 
 // ── Favourites ─────────────────────────────────────────────────────────────────
-router.get('/favourites', (req, res) => {
+// Favourites: laid out like the Library — folder cards (folders holding a
+// favourite) above a Mosaic grid of the favourited stories and photos/videos.
+router.get('/favourites', (req, res, next) => favouritesPage(req, res).catch(next));
+async function favouritesPage(req, res) {
   const u = req.user;
   const q = req.query.q || '';
   const norm = (s) => (s || '').trim().toLowerCase();
 
-  const ids = Favourites.idsForUser(u.id);
+  const ids = new Set(Favourites.idsForUser(u.id));
   // A favourite stays visible only while it's public or owned by the user.
-  const allFavBooks = Books.listAll().filter((b) => ids.includes(b.id) && (b.status === 'published' || b.user_id === u.id));
+  const allFavBooks = Books.listAll().filter((b) => ids.has(b.id) && (b.status === 'published' || b.user_id === u.id));
   const allFavImages = Gallery.listFavourites(u.id);
 
-  // Tabs are folders (a folder holds stories and photos) — but only folders
-  // that actually hold a favourited item are shown.
-  const folders = Folders.listForUser(u.id);
-  const booksIn = (fid) => allFavBooks.filter((b) => b.folder_id === fid);
-  const imagesIn = (fid) => allFavImages.filter((i) => i.folder_id === fid);
-
+  const folders = Folders.listForUser(u.id); // favourites first, then your order
   let active = null;
-  const tabId = parseInt(req.query.folder, 10);
-  if (tabId) active = folders.find((f) => f.id === tabId) || null;
+  const fid = parseInt(req.query.folder, 10);
+  if (fid) active = folders.find((f) => f.id === fid) || null;
   else if (req.query.tab != null) active = folders.find((f) => norm(f.name) === norm(req.query.tab)) || null;
-  const tabs = folders
-    .map((f) => ({ id: f.id, name: f.name, count: booksIn(f.id).length + imagesIn(f.id).length }))
-    .filter((t) => t.count > 0)
-    .map((t) => ({ ...t, active: !!active && active.id === t.id, href: '/favourites?folder=' + t.id }));
 
-  const favBooks = active ? booksIn(active.id) : allFavBooks;
-  const favImagesRaw = active ? imagesIn(active.id) : allFavImages;
-  const shownBooks = filt(favBooks, q);
-  // Photos are hidden while searching (search filters stories only).
-  const favImages = q ? [] : favImagesRaw;
+  // Sort is shared with the Library; the type filter is remembered separately.
+  let sort = req.query.sort;
+  if (sort && LIBRARY_SORTS.includes(sort)) req.session.librarySort = sort;
+  else sort = req.session.librarySort;
+  if (!LIBRARY_SORTS.includes(sort)) sort = 'latest';
+  let type = req.query.type;
+  if (type && LIBRARY_TYPES.includes(type)) req.session.favouritesType = type;
+  else type = req.session.favouritesType;
+  if (!LIBRARY_TYPES.includes(type)) type = 'all';
 
-  // Stories and photos in ONE grid, newest first — no separate sections.
+  const isVid = (i) => String(i.mime || '').startsWith('video/');
+  const stories = filt(active ? allFavBooks.filter((b) => b.folder_id === active.id) : allFavBooks, q);
+  const images = q ? [] : (active ? allFavImages.filter((i) => i.folder_id === active.id) : allFavImages);
+  const videoTotal = images.filter(isVid).length;
+  const shownStories = (type === 'all' || type === 'stories') ? stories : [];
+  const shownImages = type === 'all' ? images
+    : type === 'photos' ? images.filter((i) => !isVid(i))
+    : type === 'videos' ? images.filter(isVid) : [];
+
   const items = [
-    ...shownBooks.map((b) => ({ type: 'story', book: b, date: b.created_at || '' })),
-    ...favImages.map((i) => ({ type: 'photo', img: i, date: i.created_at || '' })),
-  ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    ...shownStories.map((b) => ({ type: 'story', book: b, date: b.created_at || '', title: b.title || '' })),
+    ...shownImages.map((i) => ({ type: 'photo', img: i, date: i.created_at || '', title: i.file_name || '' })),
+  ];
+  const byDateDesc = (a, b) => String(b.date).localeCompare(String(a.date));
+  const byName = (a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+  items.sort({ latest: byDateDesc, oldest: (a, b) => byDateDesc(b, a), az: byName, za: (a, b) => byName(b, a), favourites: byDateDesc }[sort]);
 
-  // Paginated like the library — same mixed grid, same page size.
   const perPage = 24;
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+  const pageItems = items.slice((page - 1) * perPage, page * perPage);
+  await learnSizes(pageItems.filter((it) => it.type === 'photo').map((it) => it.img));
+
+  // Folder cards: only folders holding a favourite; covers from favourited
+  // items whose thumbnails already exist (never generated on page view).
+  const ready = (key, video) => !!key && storage.hasThumbs(key, video ? 'video' : 'photo', [640]);
+  const coverFor = (imgs, books, theme) => {
+    const cells = [];
+    const sortedImgs = imgs.slice().sort((a, b) => Number(isVid(a)) - Number(isVid(b)) || b.id - a.id);
+    for (const i of sortedImgs) {
+      if (cells.length >= 3) break;
+      if (ready(i.telegram_file_id, isVid(i))) cells.push({ src: '/gallery/' + i.id + '/raw?w=640' });
+    }
+    for (const b of books) {
+      if (cells.length >= 3) break;
+      const cid = coverImageId(b);
+      const m = cid ? Media.findById(cid) : null;
+      if (m && ready(m.telegram_file_id, m.kind === 'video')) cells.push({ src: '/media/' + cid + '?w=640' });
+    }
+    if (!cells.length) cells.push({ bg: themeGradient(theme || 'terra') });
+    return cells;
+  };
+  const folderCards = folders.map((f) => {
+    const fb = allFavBooks.filter((b) => b.folder_id === f.id);
+    const fi = allFavImages.filter((i) => i.folder_id === f.id);
+    return { id: f.id, name: f.name, fav: !!f.is_fav, stories: fb.length, photos: fi.length, fb, fi, theme: f.theme, active: !!active && active.id === f.id };
+  }).filter((f) => f.stories + f.photos > 0)
+    .map((f) => ({ ...f, cover: coverFor(f.fi, f.fb.slice(0, 6), f.theme), fb: undefined, fi: undefined }));
+  const allCover = coverFor(allFavImages.slice(0, 12), allFavBooks.slice(0, 6), 'terra');
 
   res.render('favourites', {
-    items: items.slice((page - 1) * perPage, page * perPage),
+    folderCards,
+    allCover,
+    allCount: allFavBooks.length + allFavImages.length,
+    activeFolder: active ? { id: active.id, name: active.name } : null,
+    folderNames: Object.fromEntries(folders.map((f) => [f.id, f.name])),
+    items: pageItems,
+    storyTotal: stories.length,
+    photoTotal: images.length,
+    videoTotal,
+    type,
+    sort,
     page,
     totalPages,
-    tabs,
-    activeTab: active ? { name: active.name } : null,
-    allActive: !active,
-    allCount: allFavBooks.length + allFavImages.length,
-    storyTotal: shownBooks.length,
-    photoTotal: favImagesRaw.length,
     query: q,
   });
-});
+}
 
 // ── Profile ──────────────────────────────────────────────────────────────────
 router.get('/profile', (req, res) => {

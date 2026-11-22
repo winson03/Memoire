@@ -1,0 +1,53 @@
+<%
+  // Mosaic tiles shared by Library and Favourites: stories and photos/videos.
+  // Locals: items [{type:'story',book}|{type:'photo',img}], favIds, folderNames,
+  // showFolders (label each tile with its folder — used in "All" views).
+  var heartSvg = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>';
+  var playSvg = '<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>';
+  var checkSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  var dlSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>';
+  var bookSvg = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/></svg>';
+  var folderSvg = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg>';
+  var names = folderNames || {};
+  var folderPill = function (fid, low) {
+    if (!showFolders || !fid || !names[fid]) return '';
+    var n = String(names[fid]).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+    return '<a class="g-folderpill' + (low ? ' low' : '') + '" href="/library?folder=' + fid + '" title="In folder: ' + n + '">' + folderSvg + '<span>' + n + '</span></a>';
+  };
+%>
+          <% items.forEach(function(it){ %>
+            <% if (it.type === 'story') { var b = it.book; var cid = coverImageId(b); var faved = favIds.indexOf(b.id) !== -1; %>
+              <div class="gallery-tile g-story" data-kind="story" data-id="<%= b.id %>" data-ar="0.75">
+                <a class="g-media g-story-cover" href="/reader/<%= b.id %>" style="background: <%= themeGradient(b.theme) %>;" aria-label="<%= b.title %>">
+                  <% if (cid) { %><img src="/media/<%= cid %>?w=640" alt="" loading="lazy"><% } %>
+                  <span class="g-story-veil"></span>
+                  <span class="g-story-text">
+                    <span class="g-story-title"><%= b.title %></span>
+                    <% if (b.author) { %><span class="g-story-author"><%= b.author %></span><% } %>
+                  </span>
+                </a>
+                <% if (b.status === 'published') { %><span class="media-play g-story-badge"><%- bookSvg %>Published</span><% } %>
+                <%- folderPill(b.folder_id, b.status === 'published') %>
+                <span class="tile-check" aria-hidden="true"><%- checkSvg %></span>
+                <button type="button" class="gallery-fav g-story-fav <%= faved ? 'faved' : '' %>" data-story-fav="<%= b.id %>" aria-label="Favourite" aria-pressed="<%= faved ? 'true' : 'false' %>"><%- heartSvg %></button>
+              </div>
+            <% } else { var img = it.img; var isVideo = (img.mime || '').startsWith('video/'); %>
+              <div class="gallery-tile" data-kind="photo" data-id="<%= img.id %>"<% if (img.width && img.height) { %> data-ar="<%= (img.width / img.height).toFixed(4) %>"<% } %>>
+                <div class="g-media">
+                  <% if (isVideo) { %>
+                    <video muted playsinline preload="none" data-full="/gallery/<%= img.id %>/raw"></video>
+                    <span class="media-play"><%- playSvg %>Video</span>
+                  <% } else { %>
+                    <img src="/gallery/<%= img.id %>/raw?w=640" data-full="/gallery/<%= img.id %>/raw" alt="<%= img.file_name || '' %>" loading="lazy">
+                  <% } %>
+                </div>
+                <%- folderPill(img.folder_id, isVideo) %>
+                <span class="tile-check" aria-hidden="true"><%- checkSvg %></span>
+                <button type="button" class="gallery-fav <%= img.is_favourite ? 'faved' : '' %>" aria-label="Favourite" aria-pressed="<%= img.is_favourite ? 'true' : 'false' %>"><%- heartSvg %></button>
+                <div class="g-foot">
+                  <% if (img.file_name) { %><span class="tile-name" title="<%= img.file_name %>"><%= img.file_name %></span><% } else { %><span></span><% } %>
+                  <a class="g-dl" href="/gallery/<%= img.id %>/raw?download=1" download aria-label="Download"><%- dlSvg %></a>
+                </div>
+              </div>
+            <% } %>
+          <% }) %>

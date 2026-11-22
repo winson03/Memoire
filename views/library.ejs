@@ -141,42 +141,7 @@
         <script type="application/json" id="libraryStoriesData"><%- JSON.stringify(allStories).replace(/</g, '\\u003c') %></script>
 
         <div class="gallery-grid g-masonry" id="libraryGrid" data-folder="<%= activeFolder ? activeFolder.id : '' %>">
-          <% items.forEach(function(it){ %>
-            <% if (it.type === 'story') { var b = it.book; var cid = coverImageId(b); var faved = favIds.indexOf(b.id) !== -1; %>
-              <div class="gallery-tile g-story" data-kind="story" data-id="<%= b.id %>" data-ar="0.75">
-                <a class="g-media g-story-cover" href="/reader/<%= b.id %>" style="background: <%= themeGradient(b.theme) %>;" aria-label="<%= b.title %>">
-                  <% if (cid) { %><img src="/media/<%= cid %>?w=640" alt="" loading="lazy"><% } %>
-                  <span class="g-story-veil"></span>
-                  <span class="g-story-text">
-                    <span class="g-story-title"><%= b.title %></span>
-                    <% if (b.author) { %><span class="g-story-author"><%= b.author %></span><% } %>
-                  </span>
-                </a>
-                <% if (b.status === 'published') { %><span class="media-play g-story-badge"><%- bookSvg %>Published</span><% } %>
-                <%- folderPill(b.folder_id, b.status === 'published') %>
-                <span class="tile-check" aria-hidden="true"><%- checkSvg %></span>
-                <button type="button" class="gallery-fav g-story-fav <%= faved ? 'faved' : '' %>" data-story-fav="<%= b.id %>" aria-label="Favourite" aria-pressed="<%= faved ? 'true' : 'false' %>"><%- heartSvg %></button>
-              </div>
-            <% } else { var img = it.img; var isVideo = (img.mime || '').startsWith('video/'); %>
-              <div class="gallery-tile" data-kind="photo" data-id="<%= img.id %>"<% if (img.width && img.height) { %> data-ar="<%= (img.width / img.height).toFixed(4) %>"<% } %>>
-                <div class="g-media">
-                  <% if (isVideo) { %>
-                    <video muted playsinline preload="none" data-full="/gallery/<%= img.id %>/raw"></video>
-                    <span class="media-play"><%- playSvg %>Video</span>
-                  <% } else { %>
-                    <img src="/gallery/<%= img.id %>/raw?w=640" data-full="/gallery/<%= img.id %>/raw" alt="<%= img.file_name || '' %>" loading="lazy">
-                  <% } %>
-                </div>
-                <%- folderPill(img.folder_id, isVideo) %>
-                <span class="tile-check" aria-hidden="true"><%- checkSvg %></span>
-                <button type="button" class="gallery-fav <%= img.is_favourite ? 'faved' : '' %>" aria-label="Favourite" aria-pressed="<%= img.is_favourite ? 'true' : 'false' %>"><%- heartSvg %></button>
-                <div class="g-foot">
-                  <% if (img.file_name) { %><span class="tile-name" title="<%= img.file_name %>"><%= img.file_name %></span><% } else { %><span></span><% } %>
-                  <a class="g-dl" href="/gallery/<%= img.id %>/raw?download=1" download aria-label="Download"><%- dlSvg %></a>
-                </div>
-              </div>
-            <% } %>
-          <% }) %>
+          <%- include('partials/mosaic-tiles', { items: items, favIds: favIds, folderNames: folderNames, showFolders: !activeFolder }) %>
         </div>
 
         <% if (totalPages > 1) { %>
