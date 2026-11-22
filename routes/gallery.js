@@ -277,7 +277,11 @@ router.get('/:id/raw', async (req, res) => {
     try {
       return await storage.streamThumb(img.telegram_file_id, w, res, { kind: 'video' });
     } catch (err) {
-      if (!res.headersSent) res.status(404).send('No poster');
+      // No still yet: ask for one in the background (retried with back-off)
+      // so a later visit has it. The page shows a placeholder meanwhile rather
+      // than streaming the video itself just for a first frame.
+      storage.queueWarm(img.telegram_file_id, 'video');
+      if (!res.headersSent) res.set('Cache-Control', 'no-store').status(404).send('No poster');
       return;
     }
   }

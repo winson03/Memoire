@@ -255,3 +255,11 @@
 .g-masonry .g-story .media-play { pointer-events: none; }
 .g-masonry .g-story::after { display: none; }
 @media (max-width: 640px) { .g-story-title { font-size: 17px; } .g-story-text { padding: 12px; } }
+
+/* Video whose still frame isn't ready yet: a quiet placeholder, no streaming */
+.gallery-page video.no-poster {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.14) 0 22px, transparent 23px),
+    linear-gradient(135deg, #5a4034, #2f2420);
+  min-height: 160px;
+}

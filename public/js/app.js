@@ -2419,9 +2419,12 @@ function windowMedia(els, widthFor) {
       const poster = videoPosterUrl(el.dataset.full);
       probePoster(poster).then((ok) => {
         if (el._mountToken !== token) return; // scrolled away meanwhile
-        if (ok) { if (el.getAttribute('poster') !== poster) el.poster = poster; return; }
-        const want = el.dataset.full + '#t=0.1';
-        if (el.getAttribute('src') !== want) { el.src = want; el.load(); }
+        if (ok) { if (el.getAttribute('poster') !== poster) el.poster = poster; el.classList.remove('no-poster'); return; }
+        // No still yet (the server is making one in the background). Don't
+        // stream the video just for its first frame — that pulls the file
+        // through the server for every tile. Show a placeholder; the video
+        // itself plays when opened.
+        el.classList.add('no-poster');
       });
     } else {
       const want = `${el.dataset.full}?w=${widthFor()}`;
