@@ -788,6 +788,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Library: import media straight into the gallery, assigned to a collection.
 
   // Library: sort mode — reload with ?sort= (the server remembers the choice).
+  const folderSort = document.getElementById('folderSortSelect');
+  if (folderSort) folderSort.addEventListener('change', () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('fsort', folderSort.value);
+    window.location.href = url.toString();
+  });
+
   const librarySort = document.getElementById('librarySortSelect');
   if (librarySort) librarySort.addEventListener('change', () => {
     const url = new URL(window.location.href);

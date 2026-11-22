@@ -244,12 +244,14 @@ async function libraryPage(req, res) {
 
   // Paginated: a bounded page keeps the number of decoded images (and memory,
   // on the server and in mobile Safari) in check.
+  // ?view=folders shows every folder (with dates) instead of the item grid.
+  const view = req.query.view === 'folders' ? 'folders' : 'items';
   const perPage = 24;
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
   const pageItems = items.slice((page - 1) * perPage, page * perPage);
-  await learnSizes(pageItems.filter((it) => it.type === 'photo').map((it) => it.img));
+  if (view === 'items') await learnSizes(pageItems.filter((it) => it.type === 'photo').map((it) => it.img));
 
   // Folder cards: counts + a 3-picture cover (photos first, then story covers).
   const photoCounts = Gallery.countsByFolder(u.id);
@@ -276,6 +278,12 @@ async function libraryPage(req, res) {
     if (!cells.length) cells.push({ bg: themeGradient(theme || 'terra') });
     return cells;
   };
+  // Last updated = newest of: folder made, any story in it edited, any upload.
+  const latestUpload = Gallery.latestByFolder(u.id);
+  const lastTouch = {};
+  const touch = (fid, t) => { if (fid && t && (!lastTouch[fid] || String(t) > lastTouch[fid])) lastTouch[fid] = String(t); };
+  books.forEach((b) => touch(b.folder_id, b.updated_at || b.created_at));
+  Object.keys(latestUpload).forEach((fid) => touch(Number(fid), latestUpload[fid]));
   const newestFirst = (list) => list.slice().sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
   const folderCards = folders.map((f) => ({
     id: f.id,
@@ -283,11 +291,27 @@ async function libraryPage(req, res) {
     stories: storyCounts[f.id] || 0,
     photos: photoCounts[f.id] || 0,
     active: !!active && active.id === f.id,
+    created: f.created_at,
+    updated: [f.created_at, lastTouch[f.id]].filter(Boolean).sort().pop(),
     cover: coverFor(Gallery.recentPhotoKeys(u.id, f.id), newestFirst(books.filter((b) => b.folder_id === f.id)).slice(0, 6), f.theme),
   }));
   const allCover = coverFor(Gallery.recentPhotoKeys(u.id, null), newestFirst(books).slice(0, 6), 'terra');
 
+  const FOLDER_SORTS = {
+    updated: (a, b) => String(b.updated || '').localeCompare(String(a.updated || '')),
+    created: (a, b) => String(b.created || '').localeCompare(String(a.created || '')),
+    name: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }),
+    items: (a, b) => (b.stories + b.photos) - (a.stories + a.photos),
+  };
+  const fsort = FOLDER_SORTS[req.query.fsort] ? req.query.fsort : 'updated';
+  const allFolders = view === 'folders'
+    ? folderCards.filter((f) => !q || f.name.toLowerCase().includes(q.toLowerCase())).sort(FOLDER_SORTS[fsort])
+    : [];
+
   res.render('library', {
+    view,
+    fsort,
+    allFolders,
     folderCards,
     allCover,
     activeFolder: active ? { id: active.id, name: active.name } : null,

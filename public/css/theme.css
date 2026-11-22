@@ -263,3 +263,19 @@
     linear-gradient(135deg, #5a4034, #2f2420);
   min-height: 160px;
 }
+
+/* Folder row header + "View all" page */
+.g-collhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.g-collhead-title { font-family: var(--head-font); font-size: 20px; font-weight: 500; }
+.g-collhead .g-count { font-family: inherit; }
+.g-viewall { font-size: 14px; font-weight: 600; color: var(--m-acc); text-decoration: none; padding: 6px 10px; border-radius: 999px; }
+.g-viewall:hover { background: var(--m-surf); }
+.g-back { display: inline-block; font-size: 14px; color: var(--m-mute); text-decoration: none; margin-bottom: 6px; }
+.g-back:hover { color: var(--m-ink); }
+.g-fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 26px 20px; }
+.g-fcard { display: flex; flex-direction: column; gap: 3px; color: var(--m-ink); text-decoration: none; min-width: 0; }
+.g-fcard .g-cv { height: 150px; }
+.g-fcard:hover .g-cv { outline-color: var(--m-line); }
+.g-fcard:hover .g-cv img { transform: scale(1.04); }
+.g-fdates { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 4px; font-size: 12.5px; color: var(--m-mute); font-variant-numeric: tabular-nums; }
+.g-fdate-k { font-weight: 600; color: var(--m-ink); opacity: .7; }

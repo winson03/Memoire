@@ -31,7 +31,19 @@
             if (p) parts.push(p.toLocaleString('en-US') + ' ' + (p === 1 ? 'photo' : 'photos'));
             return parts.length ? parts.join(' · ') : 'Empty';
           };
+          var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          // SQLite UTC 'YYYY-MM-DD HH:MM:SS' → '12 Mar 2026'
+          var fmtDate = function (t) {
+            var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(t || ''));
+            return m ? (parseInt(m[3], 10) + ' ' + MONTHS[parseInt(m[2], 10) - 1] + ' ' + m[1]) : '—';
+          };
         %>
+
+        <% if (view !== 'folders') { %>
+        <div class="g-collhead">
+          <span class="g-collhead-title">Folders <span class="g-count"><%= folderCards.length %></span></span>
+          <a class="g-viewall" href="/library?view=folders">View all <span aria-hidden="true">→</span></a>
+        </div>
 
         <section class="g-colls" aria-label="Folders">
           <a class="g-coll" href="/library" <%- !activeFolder ? 'aria-current="page"' : '' %>>
@@ -170,6 +182,46 @@
             <div class="et"><%= query ? 'No matching stories' : (type !== 'all' && storyTotal + photoTotal ? ('No ' + type + ' here') : (activeFolder ? ('Nothing in “' + activeFolder.name + '” yet') : 'Your library is empty')) %></div>
             <div class="eh"><%= query ? 'Try a different search.' : 'Use Add to upload photos and videos, upload a whole folder, or write a new story.' %></div>
           </div>
+        <% } %>
+        <% } else { %>
+          <div class="g-head">
+            <div>
+              <a class="g-back" href="/library"><span aria-hidden="true">←</span> Library</a>
+              <h2 class="g-title">All folders <span class="g-count"><%= query ? ('matching “' + query + '” · ') : '' %><%= allFolders.length %> <%= allFolders.length === 1 ? 'folder' : 'folders' %></span></h2>
+            </div>
+            <div class="g-tools">
+              <label class="g-sortsel">
+                <span class="sr-only">Sort folders</span>
+                <select id="folderSortSelect" aria-label="Sort folders">
+                  <option value="updated" <%= fsort === 'updated' ? 'selected' : '' %>>Last updated</option>
+                  <option value="created" <%= fsort === 'created' ? 'selected' : '' %>>Newest created</option>
+                  <option value="name" <%= fsort === 'name' ? 'selected' : '' %>>Name A–Z</option>
+                  <option value="items" <%= fsort === 'items' ? 'selected' : '' %>>Most items</option>
+                </select>
+              </label>
+              <button type="button" class="g-pill g-pill-primary"
+                      data-create-dialog data-title="New folder" data-label="Folder name"
+                      data-existing="<%= JSON.stringify(folders.map(function(f){ return f.name; })) %>"
+                      data-action="/folders">+ New folder</button>
+            </div>
+          </div>
+          <% if (allFolders.length) { %>
+            <div class="g-fgrid">
+              <% allFolders.forEach(function(f){ %>
+                <a class="g-fcard" href="/library?folder=<%= f.id %>">
+                  <%- coverCells(f.cover) %>
+                  <span class="g-coll-name"><%= f.name %></span>
+                  <span class="g-coll-count"><%= countLine(f.stories, f.photos) %></span>
+                  <span class="g-fdates">
+                    <span><span class="g-fdate-k">Created</span> <%= fmtDate(f.created) %></span>
+                    <span title="<%= f.updated %> UTC"><span class="g-fdate-k">Updated</span> <%= fmtDate(f.updated) %></span>
+                  </span>
+                </a>
+              <% }) %>
+            </div>
+          <% } else { %>
+            <div class="empty g-empty"><div class="et"><%= query ? 'No folders match' : 'No folders yet' %></div><div class="eh"><%= query ? 'Try a different search.' : 'Use New folder to make one.' %></div></div>
+          <% } %>
         <% } %>
 
       </div>
