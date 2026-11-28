@@ -3436,3 +3436,11 @@ function initFolderFavsAndOrder() {
   grid.addEventListener('drop', (e) => { e.preventDefault(); finish(); });
   grid.addEventListener('dragend', finish);
 }
+
+// Show Mémoire's own "updating" page (not Render's 502) while a new version
+// goes live — see /sw.js.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () {});
+  });
+}

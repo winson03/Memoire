@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Updating · Mémoire</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<!--
+  Shown by /sw.js in place of Render's 502/503/504 page while a new version
+  goes live. Everything it needs is inline or pre-cached (logo, favicon); the
+  web fonts load if the internet is reachable and fall back otherwise.
+-->
+<style>
+:root {
+  --cream: #F6EEE4;
+  --paper: #FFFDF9;
+  --ink: #3A322A;
+  --ink-soft: rgba(58,50,42,.7);
+  --terra: #C2683E;
+  --terra-deep: #A9542E;
+  --amber: #E0A054;
+  --head: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --body: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--cream); color: var(--ink); font-family: var(--body);
+  display: grid; place-items: center; min-height: 100%;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 36px max(16px, env(safe-area-inset-left, 0px));
+  position: relative; overflow-x: hidden;
+}
+body::before { content: ""; position: fixed; inset: 0; z-index: -1;
+  background: radial-gradient(60% 50% at 20% 15%, rgba(224,160,84,.22), transparent 70%), radial-gradient(50% 45% at 85% 80%, rgba(194,104,62,.16), transparent 70%); }
+[hidden] { display: none !important; }
+main { display: grid; justify-items: center; gap: 24px; text-align: center; width: 100%; max-width: 900px; }
+.prints { position: relative; width: min(560px, 100%); height: 250px; }
+.print { position: absolute; top: 10px; width: 176px; padding: 10px 10px 34px; background: var(--paper); border-radius: 3px; box-shadow: 0 14px 30px rgba(90,60,35,.2), 0 0 0 1px rgba(58,50,42,.05); }
+.print .img { aspect-ratio: 1 / 1; border-radius: 1px; position: relative; overflow: hidden; background: #2C2620; }
+.print .img::after { content: ""; position: absolute; inset: 0; opacity: 1; animation: develop 6s ease-in-out infinite; }
+.print .cap { position: absolute; left: 0; right: 0; bottom: 9px; font-family: var(--head); font-style: italic; font-size: 14px; color: var(--ink-soft); }
+.p1 { left: 4%; transform: rotate(-8deg); }
+.p2 { left: 50%; margin-left: -88px; top: 0; transform: rotate(2deg); z-index: 2; }
+.p3 { right: 4%; transform: rotate(7deg); }
+.p1 .img::after { background: radial-gradient(70% 60% at 30% 70%, #E0A054, transparent 70%), radial-gradient(60% 60% at 75% 25%, #F3D9B5, transparent 70%), linear-gradient(160deg, #6F8E86, #C2683E); }
+.p2 .img::after { background: radial-gradient(55% 45% at 50% 38%, #F6E1C6, transparent 72%), radial-gradient(80% 60% at 50% 100%, #A9542E, transparent 70%), linear-gradient(180deg, #E9B77A, #7A3F25); animation-delay: .9s; }
+.p3 .img::after { background: radial-gradient(60% 55% at 65% 60%, #2F5D5A, transparent 70%), radial-gradient(50% 50% at 25% 30%, #F0C98F, transparent 70%), linear-gradient(200deg, #E0A054, #B8564A); animation-delay: 1.8s; }
+@keyframes develop { 0%, 35% { opacity: 1; filter: blur(0) saturate(1) brightness(1); } 55% { opacity: 0; filter: blur(14px) saturate(.2) brightness(.6); } 100% { opacity: 1; filter: blur(0) saturate(1) brightness(1); } }
+.logo { width: 92px; height: auto; display: block; }
+h1 { font-family: var(--head); font-weight: 500; font-size: clamp(28px, 4.4vw, 42px); margin: 0; line-height: 1.1; text-wrap: balance; }
+p { margin: 0; color: var(--ink-soft); line-height: 1.55; font-size: 15.5px; max-width: 46ch; }
+.timeline { width: min(520px, 100%); display: grid; gap: 8px; }
+.track { height: 6px; border-radius: 6px; background: rgba(58,50,42,.1); overflow: hidden; position: relative; }
+.track i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 6px; background: linear-gradient(90deg, var(--amber), var(--terra)); transition: width 1s linear; display: block; }
+.track.over i { width: 100% !important; animation: shimmer 1.6s ease-in-out infinite; }
+@keyframes shimmer { 50% { opacity: .55; } }
+.ticks { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: center; }
+.btn { all: unset; cursor: pointer; font-weight: 700; font-size: 14px; padding: 11px 20px; border-radius: 11px; background: var(--terra-deep); color: #FFF8F0; box-shadow: 0 8px 20px rgba(169,84,46,.28); transition: transform .2s; }
+.btn:hover { transform: translateY(-1px); }
+.btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.status { font-size: 13.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 0 rgba(224,160,84,.6); animation: pulse 1.8s infinite; display: inline-block; margin-right: 6px; vertical-align: 1px; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 9px rgba(224,160,84,0); } 100% { box-shadow: 0 0 0 0 rgba(224,160,84,0); } }
+.back { font-weight: 600; color: #3f7a4a; }
+@media (max-width: 760px) {
+  .prints { height: 200px; } .print { width: 130px; padding: 8px 8px 28px; } .p2 { margin-left: -65px; } .print .cap { font-size: 12px; bottom: 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="prints" aria-hidden="true">
+    <div class="print p1"><div class="img"></div><div class="cap">stories</div></div>
+    <div class="print p2"><div class="img"></div><div class="cap">photos</div></div>
+    <div class="print p3"><div class="img"></div><div class="cap">videos</div></div>
+  </div>
+  <img class="logo" src="/img/logo.png" alt="Mémoire">
+  <h1>Your library is developing</h1>
+  <p>A new version is going live. Give it a minute or two; everything comes back exactly as it was.</p>
+  <div class="timeline">
+    <div class="track" id="track"><i id="bar"></i></div>
+    <div class="ticks"><span>0:00</span><span id="hint">usually back by 2:00</span><span id="elapsed">0:00</span></div>
+  </div>
+  <div class="row">
+    <button class="btn" id="try" type="button">Check now</button>
+    <span class="status" id="status" role="status" aria-live="polite"><span class="pulse"></span>Checking every 5 seconds</span>
+  </div>
+</main>
+<script>
+(function () {
+  // Count from when this wait started, even across reloads of this page.
+  var KEY = 'memoireUpdatingSince';
+  var since = Date.now();
+  try {
+    var saved = Number(sessionStorage.getItem(KEY));
+    if (saved && Date.now() - saved < 15 * 60 * 1000) since = saved;
+    else sessionStorage.setItem(KEY, String(since));
+  } catch (_) {}
+
+  var bar = document.getElementById('bar');
+  var track = document.getElementById('track');
+  var elapsed = document.getElementById('elapsed');
+  var hint = document.getElementById('hint');
+  var status = document.getElementById('status');
+  var tryBtn = document.getElementById('try');
+  var checking = false;
+
+  function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  function tick() {
+    var s = Math.floor((Date.now() - since) / 1000);
+    elapsed.textContent = fmt(s);
+    bar.style.width = Math.min(100, s / 120 * 100) + '%';
+    if (s > 120) { track.classList.add('over'); hint.textContent = 'taking a little longer than usual'; }
+  }
+
+  function back() {
+    try { sessionStorage.removeItem(KEY); } catch (_) {}
+    status.innerHTML = '<span class="back">It’s back — opening your page…</span>';
+    location.reload();
+  }
+
+  function check() {
+    if (checking) return;
+    checking = true;
+    fetch('/healthz?t=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+      .then(function (r) { if (r.ok) back(); })
+      .catch(function () {})
+      .then(function () { checking = false; });
+  }
+
+  // The device itself has no internet: say that instead.
+  function offlineCopy() {
+    var off = navigator.onLine === false;
+    document.querySelector('h1').textContent = off ? 'You’re offline' : 'Your library is developing';
+    document.querySelector('main > p').textContent = off
+      ? 'This device has lost its internet connection. Mémoire will open again as soon as you’re back online.'
+      : 'A new version is going live. Give it a minute or two; everything comes back exactly as it was.';
+    document.querySelector('.timeline').hidden = off;
+  }
+  offlineCopy();
+  window.addEventListener('offline', offlineCopy);
+  window.addEventListener('online', offlineCopy);
+
+  tryBtn.addEventListener('click', function () {
+    tryBtn.textContent = 'Checking…';
+    check();
+    setTimeout(function () { tryBtn.textContent = 'Check now'; }, 1200);
+  });
+  window.addEventListener('online', check);
+  tick();
+  setInterval(tick, 1000);
+  setInterval(check, 5000);
+})();
+</script>
+</body>
+</html>

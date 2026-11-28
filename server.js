@@ -59,8 +59,17 @@ app.use(compression());
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Static assets.
-app.use(express.static(path.join(__dirname, 'public')));
+// Liveness check for the "updating" page (public/offline.html via /sw.js):
+// answers before sessions/DB so it is as cheap as possible.
+app.get('/healthz', (req, res) => { res.set('Cache-Control', 'no-store'); res.type('text').send('ok'); });
+
+// Static assets. The service worker must never be cached, or a fix to it
+// would take a day to reach browsers.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith(path.sep + 'sw.js') || filePath.endsWith(path.sep + 'offline.html')) res.set('Cache-Control', 'no-cache');
+  },
+}));
 
 // Broad per-IP rate limit (mounted after static so assets don't count).
 const { globalLimiter } = require('./middleware/rate-limit');
