@@ -19,6 +19,14 @@
     sel.value = selected ? String(selected) : '';
   }
 
+  $('ver').textContent = 'Version ' + chrome.runtime.getManifest().version;
+  chrome.runtime.sendMessage({ type: 'update-info' }, function (d) {
+    if (!d || !d.update) return;
+    $('newVer').textContent = 'v' + d.update.version + ' (you have v' + d.current + ')';
+    $('dl').href = d.update.download;
+    $('update').hidden = false;
+  });
+
   chrome.storage.local.get(['server', 'token', 'folderId'], function (s) {
     $('server').value = s.server || self.MEMOIRE_SERVER || '';
     $('token').value = s.token || '';

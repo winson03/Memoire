@@ -108,6 +108,16 @@ api.get('/jobs/:id', (req, res) => {
   res.json({ job: jobJson(j) });
 });
 
+// Latest extension version (public, so the extension can check for updates
+// before it has a key). Read fresh so a deploy is picked up immediately.
+router.get('/extension-version.json', (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cache-Control', 'no-store');
+  let version = null;
+  try { version = JSON.parse(fs.readFileSync(path.join(EXT_DIR, 'manifest.json'), 'utf8')).version; } catch (_) {}
+  res.json({ version, download: '/import/extension.zip', page: '/import' });
+});
+
 router.use('/api', api);
 
 // ── Page (signed-in only) ────────────────────────────────────────────────────
@@ -123,6 +133,7 @@ router.get('/', (req, res) => {
     hasToken: !!req.user.import_token_hash,
     newToken,
     origin,
+    extVersion: (() => { try { return JSON.parse(fs.readFileSync(path.join(EXT_DIR, 'manifest.json'), 'utf8')).version; } catch (_) { return null; } })(),
   });
 });
 

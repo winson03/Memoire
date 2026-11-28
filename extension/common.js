@@ -48,5 +48,20 @@
   chrome.runtime.onMessage.addListener(function (msg) {
     if (msg && msg.type === 'toast') toast(msg.text, msg.ok);
   });
+  // Once a day, mention a waiting update on the page.
+  try {
+    chrome.runtime.sendMessage({ type: 'update-info' }, function (d) {
+      if (!d || !d.update) return;
+      var key = 'memoireUpdateNoticed-' + d.update.version;
+      try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (_) {}
+      chrome.storage.local.get('updateToastDay', function (s) {
+        var today = new Date().toDateString();
+        if (s.updateToastDay === today) return;
+        chrome.storage.local.set({ updateToastDay: today });
+        toast('Mémoire extension update available (v' + d.update.version + '). Open the extension’s setup page to update.', null);
+      });
+    });
+  } catch (_) {}
+
   window.__memoire = { toast: toast, call: call, getCfg: getCfg, button: button, busy: busy };
 })();

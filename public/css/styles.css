@@ -951,6 +951,7 @@ li[data-status="error"] .imp-state { color: #b24a32; }
 .imp-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .imp-row form { margin: 0; }
 .imp-tag { font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: rgba(58,50,42,0.07); color: rgba(58,50,42,0.55); }
+.imp-ver { margin-left: auto; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 12.5px; font-weight: 600; color: rgba(58,50,42,0.6); }
 .imp-steps { margin: 0; padding-left: 20px; font-size: 14.5px; line-height: 1.6; color: var(--ink); }
 .imp-steps > li { margin-bottom: 10px; }
 .imp-steps ul { margin: 6px 0 0; padding-left: 18px; color: rgba(58,50,42,0.75); }

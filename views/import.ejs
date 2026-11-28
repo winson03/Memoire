@@ -54,7 +54,7 @@
         </section>
 
         <section class="settings-section">
-          <h3>Chrome extension <span class="imp-tag">computer</span></h3>
+          <h3>Chrome extension <span class="imp-tag">computer</span><% if (extVersion) { %><span class="imp-ver">Latest v<%= extVersion %></span><% } %></h3>
           <p class="imp-lede">Adds a <strong>Save</strong> button to posts on X and Patreon, saves any photo or video you right-click on other sites, and saves the page you’re on when you click its toolbar icon. It uses your own signed-in browser, so Patreon posts you pay for and X posts marked sensitive work too.</p>
           <ol class="imp-steps">
             <li><a class="btn btn-soft" href="/import/extension.zip">Download extension (.zip)</a> and unzip it.</li>
@@ -62,7 +62,7 @@
             <li>Click <strong>Load unpacked</strong> and pick the unzipped <code>memoire-save</code> folder.</li>
             <li>The setup page opens: paste your import key and pick a default folder.</li>
           </ol>
-          <p class="imp-note">Updating later: download again, replace the folder, then press the ↻ reload icon on the extension.</p>
+          <p class="imp-note">When a new version is out, the extension’s icon shows an orange <strong>NEW</strong> badge. To update: download again, replace the folder, then press the ↻ reload icon on the extension (check the version at <code>chrome://extensions</code> matches the one above).</p>
         </section>
 
         <section class="settings-section">

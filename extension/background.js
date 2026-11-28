@@ -27,14 +27,57 @@ async function api(path, body, method) {
   }
 }
 
+// ── Update check ─────────────────────────────────────────────────────────────
+// Unpacked extensions never update themselves, so compare with the version the
+// server ships and show a NEW badge (and a note on the setup page) when behind.
+function newer(a, b) {
+  const pa = String(a || '').split('.').map(Number); const pb = String(b || '').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  }
+  return false;
+}
+
+async function showUpdateBadge() {
+  const { update } = await chrome.storage.local.get('update');
+  if (update && newer(update.version, chrome.runtime.getManifest().version)) {
+    chrome.action.setBadgeBackgroundColor({ color: '#C2683E' });
+    chrome.action.setBadgeText({ text: 'NEW' });
+    chrome.action.setTitle({ title: 'Update available: v' + update.version + ' — right-click this icon → Setup & updates' });
+  } else {
+    chrome.action.setBadgeText({ text: '' });
+    chrome.action.setTitle({ title: 'Save this page to Mémoire' });
+  }
+}
+
+async function checkForUpdate() {
+  const c = await cfg();
+  if (!c.server) return;
+  try {
+    const r = await fetch(c.server + '/import/extension-version.json', { cache: 'no-store' });
+    const d = await r.json();
+    const mine = chrome.runtime.getManifest().version;
+    await chrome.storage.local.set({
+      update: d.version && newer(d.version, mine) ? { version: d.version, download: c.server + d.download, page: c.server + d.page } : null,
+      updateCheckedAt: Date.now(),
+    });
+  } catch (_) { /* offline — try again later */ }
+  showUpdateBadge();
+}
+
+chrome.alarms.create('update-check', { periodInMinutes: 360 });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'update-check') checkForUpdate(); });
+chrome.runtime.onStartup.addListener(checkForUpdate);
+
 function badge(tabId, ok, text) {
   const opts = tabId ? { tabId } : {};
   chrome.action.setBadgeBackgroundColor(Object.assign({ color: ok ? '#5a9a63' : '#c2583e' }, opts));
   chrome.action.setBadgeText(Object.assign({ text: ok ? '✓' : '!' }, opts));
-  chrome.action.setTitle(Object.assign({ title: text || 'Save this page to Mémoire' }, opts));
   setTimeout(() => {
-    chrome.action.setBadgeText(Object.assign({ text: '' }, opts));
-    chrome.action.setTitle(Object.assign({ title: 'Save this page to Mémoire' }, opts));
+    // null clears the per-tab badge so the global one (e.g. NEW) shows again.
+    if (tabId) chrome.action.setBadgeText({ tabId, text: null });
+    else chrome.action.setBadgeText({ text: '' });
+    showUpdateBadge();
   }, 4000);
 }
 
@@ -59,9 +102,11 @@ chrome.runtime.onInstalled.addListener(async (info) => {
     chrome.contextMenus.create({ id: 'media', title: 'Save to Mémoire', contexts: ['image', 'video'] });
     chrome.contextMenus.create({ id: 'link', title: 'Save linked post to Mémoire', contexts: ['link'] });
     chrome.contextMenus.create({ id: 'page', title: 'Save this page to Mémoire', contexts: ['page'] });
+    chrome.contextMenus.create({ id: 'setup', title: 'Setup & updates', contexts: ['action'] });
   });
   const c = await cfg();
   if (info.reason === 'install' || !c.token) chrome.runtime.openOptionsPage();
+  checkForUpdate();
 });
 
 async function savePage(tab) {
@@ -79,6 +124,7 @@ chrome.action.onClicked.addListener(savePage);
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const tabId = tab && tab.id;
+  if (info.menuItemId === 'setup') return chrome.runtime.openOptionsPage();
   if (info.menuItemId === 'page') return savePage(tab);
   if (info.menuItemId === 'link') return notify(tabId, await api('/link', { link: info.linkUrl }));
   if (info.menuItemId === 'media') {
@@ -105,6 +151,15 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
   if (msg && msg.type === 'cfg') { cfg().then(reply); return true; }
+  if (msg && msg.type === 'update-info') {
+    chrome.storage.local.get(['update', 'updateCheckedAt']).then(async (s) => {
+      // Re-check if the last check is over an hour old.
+      if (!s.updateCheckedAt || Date.now() - s.updateCheckedAt > 3600e3) { await checkForUpdate(); s = await chrome.storage.local.get(['update']); }
+      const u = s.update && newer(s.update.version, chrome.runtime.getManifest().version) ? s.update : null;
+      reply({ update: u, current: chrome.runtime.getManifest().version });
+    });
+    return true;
+  }
   if (msg && msg.type === 'open-options') { chrome.runtime.openOptionsPage(); return false; }
   return false;
 });
