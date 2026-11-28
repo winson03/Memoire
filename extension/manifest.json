@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Save to Mémoire",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Save photos and videos from X, Patreon and other sites straight into your private Mémoire library.",
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
   "action": { "default_title": "Save this page to Mémoire", "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png" } },

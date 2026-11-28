@@ -57,7 +57,7 @@
     var bars = article.querySelectorAll('[role="group"]');
     var bar = bars[bars.length - 1];
     if (bar) { bar.appendChild(wrap); return; }
-    var media = article.querySelector('[data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="videoComponent"]');
+    var media = article.querySelector('[data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="videoComponent"], img[src*="pbs.twimg.com/media/"], video');
     var host = (media && media.closest('div[aria-labelledby]')) || media && media.parentElement || article;
     wrap.style.margin = '8px 0';
     host.parentElement ? host.parentElement.insertBefore(wrap, host.nextSibling) : article.appendChild(wrap);
@@ -76,7 +76,7 @@
       floating.style.height = '36px';
       floating.style.padding = '0 16px';
       floating.addEventListener('click', function () {
-        var main = document.querySelector('article[data-testid="tweet"]');
+        var main = document.querySelector('article');
         if (main) return save(main, floating);
         M.busy(floating, true, 'Saving…');
         M.call('/link', { link: location.href }).then(function (d) {
@@ -94,7 +94,12 @@
 
   function scan() {
     syncFloating();
-    document.querySelectorAll('article[data-testid="tweet"], article[role="article"]').forEach(decorate);
+    // X dropped its data-testid labels (Nov 2026), so match every post <article>
+    // (skipping any nested inside another post, e.g. quoted posts).
+    document.querySelectorAll('article').forEach(function (a) {
+      if (a.parentElement && a.parentElement.closest('article')) return;
+      decorate(a);
+    });
   }
   console.info('[Mémoire] Save buttons ready on X');
   var pending = false;
