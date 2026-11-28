@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Save to Mémoire — setup</title>
+<style>
+  :root { --ink: #3A322A; --accent: #C2683E; --accent-alt: #E0A054; }
+  body { margin: 0; background: #F6EEE4; color: var(--ink); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 560px; margin: 48px auto; padding: 0 20px; }
+  h1 { font: 500 28px/1.2 Georgia, serif; margin: 0 0 6px; }
+  .sub { color: rgba(58,50,42,.6); margin: 0 0 26px; }
+  .card { background: rgba(255,255,255,.65); border: 1px solid #fff; border-radius: 16px; padding: 22px; box-shadow: 0 10px 30px rgba(120,80,50,.08); }
+  label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: rgba(58,50,42,.55); margin: 16px 0 6px; }
+  label:first-child { margin-top: 0; }
+  input, select { width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1px solid rgba(58,50,42,.15); border-radius: 10px; font: inherit; background: #fff; color: var(--ink); }
+  .row { display: flex; gap: 10px; margin-top: 20px; align-items: center; flex-wrap: wrap; }
+  button { border: 0; border-radius: 10px; padding: 11px 18px; font: 700 14px/1 inherit; cursor: pointer; background: linear-gradient(135deg, var(--accent), var(--accent-alt)); color: #FFF8F0; }
+  button.soft { background: #fff; color: var(--ink); border: 1px solid rgba(58,50,42,.15); font-weight: 600; }
+  #status { font-size: 14px; }
+  #status.ok { color: #3f7a4a; } #status.err { color: #b24a32; }
+  .help { margin-top: 26px; font-size: 14px; color: rgba(58,50,42,.7); }
+  .help li { margin-bottom: 6px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Save to Mémoire</h1>
+  <p class="sub">Connect this browser to your private library.</p>
+  <div class="card">
+    <label for="server">Mémoire address</label>
+    <input id="server" type="url" placeholder="https://…">
+    <label for="token">Import key</label>
+    <input id="token" type="password" placeholder="mem_…" autocomplete="off">
+    <div class="row" style="margin-top:8px"><a id="getKey" href="#" target="_blank" rel="noopener">Get your key from the “Save from web” page</a></div>
+    <label for="folder">Save into</label>
+    <select id="folder"><option value="">No folder</option></select>
+    <div class="row">
+      <button id="save" type="button">Save &amp; test</button>
+      <span id="status" role="status"></span>
+    </div>
+  </div>
+  <ul class="help">
+    <li><strong>X:</strong> press <strong>Save</strong> under any post with photos or videos.</li>
+    <li><strong>Patreon:</strong> press <strong>Save</strong> on a post card, or <strong>Save to Mémoire</strong> on a post page.</li>
+    <li><strong>Anywhere else:</strong> right-click a photo or video → <strong>Save to Mémoire</strong>, or click the toolbar icon to save the page’s post.</li>
+  </ul>
+</main>
+<script src="config.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

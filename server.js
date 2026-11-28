@@ -134,6 +134,7 @@ app.use(locals);
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/auth', require('./routes/auth'));
+app.use('/import', require('./routes/import'));
 app.use('/', require('./routes/public'));
 app.use('/', require('./routes/app'));
 app.use('/folders', require('./routes/folders'));

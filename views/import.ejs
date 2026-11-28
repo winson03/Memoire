@@ -1,0 +1,160 @@
+<%- include('partials/head', { title: 'Save from web' }) %>
+<div class="shell">
+  <%- include('partials/sidebar') %>
+  <main class="main">
+    <%- include('partials/topbar', { pageTitle: 'Save from web', searchAction: '/library' }) %>
+    <div class="content">
+      <div class="page import-page">
+
+        <section class="settings-section">
+          <h3>Paste a link</h3>
+          <p class="imp-lede">A post on X, Bluesky or Reddit, or any page or file link. Its photos and videos go straight into your Library.</p>
+          <form id="impForm" class="imp-form" autocomplete="off">
+            <input class="input" id="impLink" type="url" inputmode="url" placeholder="https://x.com/…/status/…" required>
+            <select class="input imp-folder" id="impFolder" aria-label="Folder">
+              <option value="">No folder</option>
+              <% folders.forEach(function(f){ %><option value="<%= f.id %>"><%= f.is_fav ? '★ ' : '' %><%= f.name %></option><% }) %>
+            </select>
+            <button class="btn btn-accent" type="submit" id="impGo">Save</button>
+          </form>
+          <p class="imp-msg" id="impMsg" role="status" aria-live="polite"></p>
+
+          <div class="imp-recent" id="impRecent" <%- recent.length ? '' : 'hidden' %>>
+            <h4>Recent</h4>
+            <ul id="impList">
+              <% recent.forEach(function(j){ %>
+                <li data-status="<%= j.status %>">
+                  <span class="imp-dot"></span>
+                  <span class="imp-what"><strong><%= j.source || 'Web' %></strong><% if (j.folder_name) { %> → <%= j.folder_name %><% } %></span>
+                  <span class="imp-state"><%= j.status === 'done' ? (j.saved + ' saved' + (j.skipped ? ', ' + j.skipped + ' already had' : '') + (j.failed ? ', ' + j.failed + ' failed' : '')) : j.status === 'error' ? (j.error || 'Failed') : ('Saving ' + (j.saved + j.skipped + j.failed) + ' / ' + j.total) %></span>
+                </li>
+              <% }) %>
+            </ul>
+          </div>
+        </section>
+
+        <section class="settings-section" id="key">
+          <h3>Your import key</h3>
+          <p class="imp-lede">The Chrome extension and the iPhone Shortcut use this private key to save into your account. Keep it to yourself; if it leaks, make a new one and the old key stops working.</p>
+          <% if (newToken) { %>
+            <div class="imp-token">
+              <code id="impToken"><%= newToken %></code>
+              <button class="btn btn-soft" type="button" data-copy="#impToken">Copy</button>
+            </div>
+            <p class="imp-warn">Copy it now — it is only shown once.</p>
+          <% } else if (hasToken) { %>
+            <p class="imp-ok">A key is active.</p>
+          <% } %>
+          <div class="imp-row">
+            <form action="/import/token" method="post"><button class="btn <%= hasToken || newToken ? 'btn-soft' : 'btn-accent' %>" type="submit"><%= hasToken || newToken ? 'Make a new key' : 'Create key' %></button></form>
+            <% if (hasToken || newToken) { %>
+              <form action="/import/token/revoke" method="post"><button class="btn btn-soft" type="submit">Turn off</button></form>
+            <% } %>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Chrome extension <span class="imp-tag">computer</span></h3>
+          <p class="imp-lede">Adds a <strong>Save</strong> button to posts on X and Patreon, saves any photo or video you right-click on other sites, and saves the page you’re on when you click its toolbar icon. It uses your own signed-in browser, so Patreon posts you pay for and X posts marked sensitive work too.</p>
+          <ol class="imp-steps">
+            <li><a class="btn btn-soft" href="/import/extension.zip">Download extension (.zip)</a> and unzip it.</li>
+            <li>Open <code>chrome://extensions</code> and switch on <strong>Developer mode</strong> (top right).</li>
+            <li>Click <strong>Load unpacked</strong> and pick the unzipped <code>memoire-save</code> folder.</li>
+            <li>The setup page opens: paste your import key and pick a default folder.</li>
+          </ol>
+          <p class="imp-note">Updating later: download again, replace the folder, then press the ↻ reload icon on the extension.</p>
+        </section>
+
+        <section class="settings-section">
+          <h3>iPhone Shortcut <span class="imp-tag">phone</span></h3>
+          <p class="imp-lede">Adds <strong>Save to Mémoire</strong> to the Share menu in the X app, Safari and others. Best for public X, Bluesky and Reddit posts.</p>
+          <ol class="imp-steps">
+            <li>Open the <strong>Shortcuts</strong> app → <strong>+</strong> → name it <em>Save to Mémoire</em>.</li>
+            <li>Tap the <strong>ⓘ</strong> button and switch on <strong>Show in Share Sheet</strong>. Set it to receive <strong>URLs</strong> and <strong>Text</strong>.</li>
+            <li>Add the action <strong>Get Contents of URL</strong> and set:
+              <ul>
+                <li>URL: <code class="imp-copyable" id="impEndpoint"><%= origin %>/import/api/link</code> <button class="imp-mini" type="button" data-copy="#impEndpoint">Copy</button></li>
+                <li>Method: <strong>POST</strong></li>
+                <li>Headers: <code>Authorization</code> = <code>Bearer </code> followed by your import key</li>
+                <li>Request Body: <strong>JSON</strong>, key <code>link</code> = <strong>Shortcut Input</strong>
+                  <% if (folders.length) { %> (optional: add a Number <code>folder_id</code> — e.g. <% folders.slice(0, 3).forEach(function(f, i){ %><%= i ? ', ' : '' %><%= f.name %> = <%= f.id %><% }) %>)<% } %></li>
+              </ul>
+            </li>
+            <li>Add <strong>Get Dictionary Value</strong> → key <code>message</code>, then <strong>Show Notification</strong> with that value. (If it fails, use key <code>error</code> to see why.)</li>
+          </ol>
+          <p class="imp-note">Then in X: tap Share on a post → <strong>Share via…</strong> → <strong>Save to Mémoire</strong>.</p>
+        </section>
+
+        <p class="imp-note imp-foot">Only save things for your own private library. Don’t repost creators’ paid content.</p>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+(function () {
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var el = document.querySelector(b.getAttribute('data-copy'));
+      if (!el) return;
+      navigator.clipboard.writeText(el.textContent.trim()).then(function () {
+        var t = b.textContent; b.textContent = 'Copied'; setTimeout(function () { b.textContent = t; }, 1400);
+      });
+    });
+  });
+
+  var form = document.getElementById('impForm');
+  var link = document.getElementById('impLink');
+  var folder = document.getElementById('impFolder');
+  var go = document.getElementById('impGo');
+  var msg = document.getElementById('impMsg');
+  var wrap = document.getElementById('impRecent');
+  var list = document.getElementById('impList');
+  try { var f0 = localStorage.getItem('impFolder'); if (f0 && folder.querySelector('option[value="' + f0 + '"]')) folder.value = f0; } catch (_) {}
+  folder.addEventListener('change', function () { try { localStorage.setItem('impFolder', folder.value); } catch (_) {} });
+
+  function stateText(j) {
+    if (j.status === 'done') return j.saved + ' saved' + (j.skipped ? ', ' + j.skipped + ' already had' : '') + (j.failed ? ', ' + j.failed + ' failed' : '');
+    if (j.status === 'error') return j.error || 'Failed';
+    return 'Saving ' + (j.saved + j.skipped + j.failed) + ' / ' + j.total;
+  }
+  var timer = null;
+  function refresh() {
+    fetch('/import/recent.json', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      var rows = d.recent || [];
+      wrap.hidden = !rows.length;
+      list.innerHTML = '';
+      rows.forEach(function (j) {
+        var li = document.createElement('li');
+        li.setAttribute('data-status', j.status);
+        li.innerHTML = '<span class="imp-dot"></span><span class="imp-what"><strong></strong><span class="f"></span></span><span class="imp-state"></span>';
+        li.querySelector('strong').textContent = j.source || 'Web';
+        li.querySelector('.f').textContent = j.folder ? ' → ' + j.folder : '';
+        li.querySelector('.imp-state').textContent = stateText(j);
+        list.appendChild(li);
+      });
+      var busy = rows.some(function (j) { return j.status === 'pending' || j.status === 'running'; });
+      clearTimeout(timer);
+      if (busy) timer = setTimeout(refresh, 2500);
+    }).catch(function () {});
+  }
+  if (list.querySelector('[data-status="pending"],[data-status="running"]')) refresh();
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    go.disabled = true; msg.className = 'imp-msg'; msg.textContent = 'Reading the link…';
+    fetch('/import/api/link', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ link: link.value, folder_id: folder.value || null }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.error) { msg.className = 'imp-msg err'; msg.textContent = d.error; return; }
+      msg.className = 'imp-msg ok'; msg.textContent = d.message;
+      link.value = '';
+      refresh();
+    }).catch(function () {
+      msg.className = 'imp-msg err'; msg.textContent = 'Could not reach the server.';
+    }).finally(function () { go.disabled = false; });
+  });
+})();
+</script>
+<%- include('partials/foot') %>
